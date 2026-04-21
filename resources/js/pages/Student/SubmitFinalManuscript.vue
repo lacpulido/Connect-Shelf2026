@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { Head, useForm, usePage } from '@inertiajs/vue3'
 import { computed, ref, watch } from 'vue'
-import { LoaderCircle } from 'lucide-vue-next'
+import { CheckCircle2, Clock3, FileText, LoaderCircle } from 'lucide-vue-next'
 import type { PageProps as InertiaPageProps } from '@inertiajs/core'
 import { Project } from '@/types/project'
 import AppSidebar from '@/components/AppSidebar.vue'
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList } from '@/components/ui/breadcrumb'
 import { Separator } from '@/components/ui/separator'
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { useAlerts } from '@/composables/useAlerts'
 
 interface PageProps extends InertiaPageProps {
@@ -64,6 +65,12 @@ function handleFileChange(event: Event) {
         form.manuscript = input.files[0]
         fileError.value = ''
     }
+}
+
+function cleanFileName(name: string | null): string {
+    if (!name) return ''
+
+    return name.replace(/^\d+_/, '')
 }
 
 function submit() {
@@ -144,45 +151,74 @@ function submit() {
                 </div>
 
                 <div v-if="!project" class="flex min-h-[60vh] items-center justify-center">
-                    <div class="w-full max-w-md rounded-2xl border border-gray-200 bg-white px-8 py-12 text-center shadow-sm">
-                        <p class="text-sm text-gray-500">No project found for your account.</p>
-                    </div>
+                    <Empty class="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-sm">
+                        <EmptyHeader>
+                            <EmptyMedia variant="icon">
+                                <FileText />
+                            </EmptyMedia>
+                        </EmptyHeader>
+
+                        <EmptyTitle>No Project Found</EmptyTitle>
+                        <EmptyDescription>
+                            No project found for your account.
+                        </EmptyDescription>
+
+                        <EmptyContent />
+                    </Empty>
                 </div>
 
                 <div
                     v-else-if="manuscriptStatus === 'approved'"
                     class="flex min-h-[60vh] items-center justify-center"
                 >
-                    <div class="w-full max-w-md rounded-2xl border border-gray-200 bg-white px-8 py-12 text-center shadow-sm">
-                        <p class="mb-2 text-2xl font-semibold text-gray-900">Approved</p>
-                        <p class="text-sm text-gray-500">
-                            Your final manuscript has been successfully approved.
-                        </p>
+                    <Empty class="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-sm">
+                        <EmptyHeader>
+                            <EmptyMedia variant="icon">
+                                <CheckCircle2 />
+                            </EmptyMedia>
+                        </EmptyHeader>
 
-                        <p
-                            v-if="manuscriptFileName"
-                            class="mt-4 text-sm text-gray-700"
-                        >
-                            File: {{ manuscriptFileName }}
-                        </p>
-                    </div>
+                        <EmptyTitle>Approved</EmptyTitle>
+                        <EmptyDescription>
+                            Your final manuscript has been successfully approved.
+                        </EmptyDescription>
+
+                        <EmptyContent>
+                            <p
+                                v-if="manuscriptFileName"
+                                class="text-sm text-gray-700"
+                            >
+                                File: {{ cleanFileName(manuscriptFileName) }}
+                            </p>
+                        </EmptyContent>
+                    </Empty>
                 </div>
 
                 <div
                     v-else-if="project.adviser_id && manuscriptSubmitted"
                     class="flex min-h-[60vh] items-center justify-center"
                 >
-                    <div class="w-full max-w-md rounded-2xl border border-gray-200 bg-white px-8 py-12 text-center shadow-sm">
-                        <p class="mb-2 text-xl font-semibold text-gray-900">Pending Review</p>
-                        <p class="text-sm text-gray-500">Your manuscript is under review.</p>
+                    <Empty class="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-sm">
+                        <EmptyHeader>
+                            <EmptyMedia variant="icon">
+                                <Clock3 />
+                            </EmptyMedia>
+                        </EmptyHeader>
 
-                        <p
-                            v-if="manuscriptFileName"
-                            class="mt-4 text-sm text-gray-700"
-                        >
-                            Uploaded File: {{ manuscriptFileName }}
-                        </p>
-                    </div>
+                        <EmptyTitle>Pending Review</EmptyTitle>
+                        <EmptyDescription>
+                            Your manuscript is under review.
+                        </EmptyDescription>
+
+                        <EmptyContent>
+                            <p
+                                v-if="manuscriptFileName"
+                                class="text-sm text-gray-700"
+                            >
+                                Uploaded File: {{ cleanFileName(manuscriptFileName) }}
+                            </p>
+                        </EmptyContent>
+                    </Empty>
                 </div>
 
                 <div v-else class="max-w-xl rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
@@ -240,14 +276,14 @@ function submit() {
                             </label>
 
                             <p v-if="form.manuscript" class="mt-2 text-xs text-gray-500">
-                                Selected: {{ form.manuscript.name }}
+                                Selected: {{ cleanFileName(form.manuscript.name) }}
                             </p>
 
                             <p
                                 v-else-if="manuscriptSubmitted && manuscriptFileName"
                                 class="mt-2 text-xs text-gray-700"
                             >
-                                Uploaded: {{ manuscriptFileName }}
+                                Uploaded: {{ cleanFileName(manuscriptFileName) }}
                             </p>
 
                             <p v-if="fileError" class="mt-1 text-xs text-red-500">
