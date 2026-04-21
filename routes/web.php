@@ -50,6 +50,7 @@ use App\Http\Controllers\public\CapstoneProjectController;
 //Public Routes
 //Route::get('/manuscripts/search', [SearchController::class, 'search']);
 Route::get('/', [FeaturedProjectController::class, 'index'])->name('home');
+
 Route::get('/featured-projects', [FeaturedProjectController::class, 'index'])
     ->name('featured.projects');
 
