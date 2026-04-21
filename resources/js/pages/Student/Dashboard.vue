@@ -4,10 +4,12 @@ import RecentActivities from '@/components/RecentActivities.vue';
 import ScheduleCard from '@/components/Schedule.vue';
 import StatusSummary from '@/components/StatusSummary.vue';
 import { Breadcrumb, BreadcrumbItem as CrumbItem, BreadcrumbList } from '@/components/ui/breadcrumb';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Separator } from '@/components/ui/separator';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import type { Project } from '@/types/project';
 import { Head, Link, usePage, usePoll } from '@inertiajs/vue3';
+import { CheckCircle2, Clock3, FileCheck, FolderOpen } from 'lucide-vue-next';
 import { computed } from 'vue';
 
 type Panelist = {
@@ -154,50 +156,76 @@ usePoll(2000, {
                 </div>
 
                 <div v-if="!hasAnyProject" class="flex min-h-[60vh] items-center justify-center">
-                    <div class="w-full max-w-md rounded-2xl border border-gray-400 px-8 py-12 text-center">
-                        <h2 class="text-xl font-semibold text-black">No Project Yet</h2>
-                        <p class="mt-2 text-sm text-gray-500">
-                            Start by creating your first project.
-                        </p>
+                    <Empty class="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-sm">
+                        <EmptyHeader>
+                            <EmptyMedia variant="icon">
+                                <FolderOpen />
+                            </EmptyMedia>
+                        </EmptyHeader>
 
-                        <Link
-                            v-if="canCreateProject"
-                            :href="route('student.projects.create')"
-                            class="mt-6 inline-block rounded-lg bg-[#0C4B05] px-6 py-2.5 text-sm text-white"
-                        >
-                            Create Project
-                        </Link>
-                    </div>
+                        <EmptyTitle>No Project Yet</EmptyTitle>
+                        <EmptyDescription>
+                            Start by creating your first project.
+                        </EmptyDescription>
+
+                        <EmptyContent>
+                            <Link
+                                v-if="canCreateProject"
+                                :href="route('student.projects.create')"
+                                class="inline-flex rounded-xl bg-[#0C4B05] px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
+                            >
+                                Create Project
+                            </Link>
+                        </EmptyContent>
+                    </Empty>
                 </div>
 
                 <div v-else-if="!project" class="flex min-h-[60vh] items-center justify-center">
-                    <div class="w-full max-w-md rounded-2xl border border-black px-8 py-12 text-center">
-                        <h2 class="text-xl font-semibold text-black">Project Record Found</h2>
-                        <p class="mt-2 text-sm text-gray-500">
-                            You already created a project before.
-                        </p>
-                        <p class="mt-4 text-sm font-medium text-red-600">
-                            You can only create one project.
-                        </p>
-                    </div>
+                    <Empty class="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-sm">
+                        <EmptyHeader>
+                            <EmptyMedia variant="icon">
+                                <FileCheck />
+                            </EmptyMedia>
+                        </EmptyHeader>
+
+                        <EmptyTitle>Project Record Found</EmptyTitle>
+                        <EmptyDescription>
+                            You already created a project before. You can only create one project.
+                        </EmptyDescription>
+                        <EmptyContent />
+                    </Empty>
                 </div>
 
                 <div v-else-if="waitingApproval" class="flex min-h-[60vh] items-center justify-center">
-                    <div class="w-full max-w-md rounded-2xl border border-black px-8 py-12 text-center">
-                        <h2 class="text-xl font-semibold text-black">Project Submitted</h2>
-                        <p class="mt-2 text-sm text-gray-500">
+                    <Empty class="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-sm">
+                        <EmptyHeader>
+                            <EmptyMedia variant="icon">
+                                <Clock3 />
+                            </EmptyMedia>
+                        </EmptyHeader>
+
+                        <EmptyTitle>Project Submitted</EmptyTitle>
+                        <EmptyDescription>
                             Please wait for approval.
-                        </p>
-                    </div>
+                        </EmptyDescription>
+                        <EmptyContent />
+                    </Empty>
                 </div>
 
                 <div v-else-if="completedProject" class="flex min-h-[60vh] items-center justify-center">
-                    <div class="w-full max-w-md rounded-2xl border border-black px-8 py-12 text-center">
-                        <h2 class="text-xl font-semibold text-black">Project Completed</h2>
-                        <p class="mt-2 text-sm text-gray-500">
+                    <Empty class="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-sm">
+                        <EmptyHeader>
+                            <EmptyMedia variant="icon">
+                                <CheckCircle2 />
+                            </EmptyMedia>
+                        </EmptyHeader>
+
+                        <EmptyTitle>Project Completed</EmptyTitle>
+                        <EmptyDescription>
                             Your project has already been completed.
-                        </p>
-                    </div>
+                        </EmptyDescription>
+                        <EmptyContent />
+                    </Empty>
                 </div>
 
                 <div v-else-if="approved" class="space-y-6">
