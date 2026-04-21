@@ -15,13 +15,13 @@ class EmbeddingService
     public function generate(string $text): array
     {
         try {
-            $response = Http::timeout(30)->post(
-                'http://ollama:11434/api/embeddings',
-                [
-                    'model' => 'nomic-embed-text',
-                    'prompt' => $text,
-                ]
-            );
+           $response = Http::timeout(30)->post(
+    config('services.ollama.host') . '/api/embeddings',
+    [
+        'model' => config('services.ollama.model'),
+        'prompt' => $text,
+    ]
+);
 
             if (!$response->successful()) {
                 Log::error('Ollama embedding failed: ' . $response->body());

@@ -35,5 +35,9 @@ return [
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
     ],
+    'ollama' => [
+    'host' => env('OLLAMA_HOST', 'http://localhost:11434'),
+    'model' => env('OLLAMA_MODEL', 'nomic-embed-text'),
+],
 
 ];
