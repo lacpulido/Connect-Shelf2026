@@ -162,14 +162,14 @@ const formattedDate = computed(() => {
                             <FileText class="h-8 w-8 text-gray-600" />
                         </div>
 
-                        <a
-                            v-if="documentActionUrl"
-                            :href="documentActionUrl"
-                            class="inline-flex items-center gap-2 rounded-lg bg-[#0C4B05] px-5 py-2 text-sm font-medium text-white shadow transition hover:bg-[#0a3d04]"
-                        >
-                            <Download class="h-4 w-4" />
-                            Download PDF
-                        </a>
+                         <a
+            v-if="project.manuscript?.id"
+            :href="route('manuscripts.download', project.manuscript.id)"
+            class="inline-flex items-center rounded-md bg-[#0C4B05] px-4 py-2 text-sm font-medium text-white hover:bg-[#083603]"
+        >
+            Download Manuscript
+        </a>
+
 
                         <div v-else class="mt-2 text-sm text-gray-400">
                             No file available

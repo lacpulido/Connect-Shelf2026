@@ -11,7 +11,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ManuscriptController extends Controller
 {
-    public function download(Request $request, $id): StreamedResponse
+    public function download(Request $request, int $id): StreamedResponse
     {
         $manuscript = ProjectManuscript::query()
             ->withTrashed()
@@ -24,9 +24,10 @@ class ManuscriptController extends Controller
             abort(404, 'No file is attached to this manuscript.');
         }
 
+        $disk = Storage::disk('local');
         $filePath = 'final_manuscripts/' . $manuscript->filename;
 
-        if (! Storage::exists($filePath)) {
+        if (! $disk->exists($filePath)) {
             abort(404, 'File not found.');
         }
 
@@ -39,11 +40,11 @@ class ManuscriptController extends Controller
             'user_agent'    => $request->userAgent(),
         ]);
 
-        return Storage::download(
+        return $disk->download(
             $filePath,
             $this->makeDownloadName($manuscript),
             [
-                'Content-Type' => Storage::mimeType($filePath) ?? 'application/pdf',
+                'Content-Type' => $disk->mimeType($filePath) ?? 'application/pdf',
             ]
         );
     }
