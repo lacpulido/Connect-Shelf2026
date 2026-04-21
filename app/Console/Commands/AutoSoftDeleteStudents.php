@@ -13,7 +13,7 @@ class AutoSoftDeleteStudents extends Command
 
     public function handle(): int
     {
-        $cutoff = Carbon::now()->subMonths(8);
+        $cutoff = Carbon::now()->subMinute();
 
         $users = User::query()
             ->where('user_type', 2) // 2 = student
