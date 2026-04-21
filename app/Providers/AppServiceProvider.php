@@ -5,6 +5,7 @@ namespace App\Providers;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\URL; 
 use Inertia\Inertia;
 use App\Models\Notification;
 
@@ -12,10 +13,13 @@ class AppServiceProvider extends ServiceProvider
 {
     public function boot(): void
     {
+        // ✅ EKSALTONG DAGDAG PARA SA PRODUCTION HTTPS
+        if (config('app.env') === 'production') {
+            URL::forceScheme('https');
+        }
+
         Inertia::share([
-
             'auth' => function () {
-
                 if (!Auth::check()) {
                     return null;
                 }
@@ -42,9 +46,7 @@ class AppServiceProvider extends ServiceProvider
                 ];
             },
 
-            // ✅ FIXED NOTIFICATIONS
             'notifications' => function () {
-
                 if (!Auth::check()) {
                     return [];
                 }
@@ -62,10 +64,7 @@ class AppServiceProvider extends ServiceProvider
                             'type'           => $n->type,
                             'reference_id'   => $n->reference_id,
                             'reference_type' => $n->reference_type,
-
-                            // ✅ IMPORTANT FIX
-                            'meta' => $n->meta ? json_decode($n->meta, true) : null,
-
+                            'meta'           => $n->meta ? json_decode($n->meta, true) : null,
                             'created_at'     => $n->created_at->toDateTimeString(),
                         ];
                     })
@@ -73,7 +72,6 @@ class AppServiceProvider extends ServiceProvider
             },
 
             'unread_notifications_count' => function () {
-
                 if (!Auth::check()) {
                     return 0;
                 }
@@ -82,7 +80,6 @@ class AppServiceProvider extends ServiceProvider
                     ->where('status', 'UNREAD')
                     ->count();
             },
-
         ]);
     }
 }
