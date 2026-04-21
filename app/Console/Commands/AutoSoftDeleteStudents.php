@@ -9,28 +9,31 @@ use Illuminate\Support\Carbon;
 class AutoSoftDeleteStudents extends Command
 {
     protected $signature = 'app:auto-soft-delete-students';
-    protected $description = 'Deactivate students 8 months after their last completed project';
+    protected $description = 'Deactivate students after their last completed project for testing';
 
     public function handle(): int
     {
+        // TEST MODE:
+        // Any completed project older than 1 minute will qualify
         $cutoff = Carbon::now()->subMinute();
+
+        $this->info('Cutoff: ' . $cutoff->toDateTimeString());
 
         $users = User::query()
             ->where('user_type', 2) // 2 = student
             ->whereNull('deleted_at') // not soft deleted
             ->where('is_active', 1)
             ->where('status', 'Active')
-            // must have at least one completed project older than cutoff
-            ->whereHas('projects', function ($query) use ($cutoff) {
+            ->whereHas('projects', function ($query) {
                 $query->where('status', 'Completed')
-                    ->whereNotNull('completed_at')
-                    ->where('completed_at', '<=', $cutoff);
+                    ->whereNotNull('completed_at');
             })
-            // must NOT have any ongoing project
             ->whereDoesntHave('projects', function ($query) {
                 $query->where('status', 'Ongoing');
             })
             ->get();
+
+        $this->info('Matched users before latest-project check: ' . $users->count());
 
         $count = 0;
 
@@ -42,21 +45,29 @@ class AutoSoftDeleteStudents extends Command
                 ->first();
 
             if (! $latestCompletedProject) {
+                $this->info("User {$user->id}: no completed project found.");
                 continue;
             }
 
-            if (Carbon::parse($latestCompletedProject->completed_at)->lte($cutoff)) {
+            $completedAt = Carbon::parse($latestCompletedProject->completed_at);
+
+            $this->info("User {$user->id} latest completed_at: " . $completedAt->toDateTimeString());
+
+            if ($completedAt->lte($cutoff)) {
                 $user->update([
                     'is_active' => 0,
                     'status' => 'Inactive',
                     'deactivated_at' => now(),
                 ]);
 
+                $this->info("User {$user->id} deactivated.");
                 $count++;
+            } else {
+                $this->info("User {$user->id} not yet eligible.");
             }
         }
 
-        $this->info("{$count} student account(s) deactivated.");
+        $this->info("Total deactivated: {$count}");
 
         return Command::SUCCESS;
     }
