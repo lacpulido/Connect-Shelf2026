@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Project;
-use App\Models\ProjectManuscript;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -14,45 +13,48 @@ class FeaturedProjectController extends Controller
         $year = $request->input('year');
         $projectType = $request->input('project_type');
 
-        $query = ProjectManuscript::with([
-            'project.user',
-            'project.department',
-        ])->whereHas('project');
+        $query = Project::query()
+            ->with([
+                'user',
+                'department',
+                'manuscripts' => fn ($q) => $q->withTrashed(), // ✅ include deleted manuscripts
+            ])
+            ->whereHas('manuscripts', function ($q) {
+                $q->withTrashed(); // ✅ include deleted in existence check
+            });
 
         if (!empty($year)) {
-            $query->whereHas('project', function ($q) use ($year) {
-                $q->where('academic_year', $year);
-            });
+            $query->where('academic_year', $year);
         }
 
         if (!empty($projectType)) {
-            $query->whereHas('project', function ($q) use ($projectType) {
-                $q->where('project_type', $projectType);
-            });
+            $query->where('project_type', $projectType);
         }
 
         $projects = $query
             ->inRandomOrder()
             ->limit(3)
             ->get()
-            ->map(function ($manuscript) {
-                $project = $manuscript->project;
+            ->map(function ($project) {
+
+                // ⚠️ include deleted manuscripts
+                $manuscript = $project->manuscripts->first();
 
                 return [
-                    'id' => $manuscript->id,
+                    'id' => $manuscript?->id,
                     'type' => strtolower($project->project_type ?? 'thesis'),
-                    'title' => $manuscript->title,
+                    'title' => $manuscript?->title ?? 'Untitled Project',
                     'author' => $project->user->name ?? 'Unknown Author',
                     'department' => $project->department->name ?? 'Unknown Department',
                     'year' => $project->academic_year ?? now()->year,
                     'views' => 0,
                     'downloads' => 0,
-                    'abstract' => $manuscript->abstract,
+                    'abstract' => $manuscript?->abstract ?? 'No abstract available.',
                 ];
             })
+            ->filter(fn ($project) => !is_null($project['id']))
             ->values();
 
-        // ✅ FILTER CHOICES FROM DATABASE
         $years = Project::query()
             ->whereNotNull('academic_year')
             ->where('academic_year', '!=', '')
