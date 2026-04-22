@@ -101,7 +101,7 @@ const downloadFile = (project) => {
 <template>
     <section class="px-4 py-10 sm:px-6 sm:py-14 lg:px-8 lg:py-16">
         <div class="mx-auto max-w-7xl">
-            <h1 class="mb-3 text-center text-3xl font-bold leading-tight sm:text-4xl md:text-5xl lg:text-6xl">
+            <h1 class="mb-3 text-center text-3xl  leading-tight sm:text-4xl md:text-5xl lg:text-6xl">
                 <span style="color: #0C4B05;">Explore</span>
                 <span style="color: #FFCD00;"> Projects</span>
             </h1>
