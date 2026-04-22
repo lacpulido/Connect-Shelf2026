@@ -1,11 +1,10 @@
 <script setup>
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, onBeforeUnmount } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 import { Search, FileText } from 'lucide-vue-next'
 
 const page = usePage()
 
-// STATE
 const query = ref('')
 const results = ref([])
 const loading = ref(false)
@@ -25,6 +24,10 @@ const closeModal = () => {
     selectedProject.value = null
     document.body.style.overflow = ''
 }
+
+onBeforeUnmount(() => {
+    document.body.style.overflow = ''
+})
 
 let timeout = null
 
@@ -98,14 +101,12 @@ const downloadFile = (project) => {
 <template>
     <section class="px-4 py-10 sm:px-6 sm:py-14 lg:px-8 lg:py-16">
         <div class="mx-auto max-w-7xl">
-            <h1
-                class="mb-3 text-center text-3xl font-bold leading-tight sm:text-4xl md:text-5xl lg:text-6xl"
-            >
+            <h1 class="mb-3 text-center text-3xl font-bold leading-tight sm:text-4xl md:text-5xl lg:text-6xl">
                 <span style="color: #0C4B05;">Explore</span>
                 <span style="color: #FFCD00;"> Projects</span>
             </h1>
 
-            <p class="mb-8 text-center text-base text-gray-600 sm:mb-10 sm:text-lg md:text-xl">
+            <p class="mb-8 text-center text-sm text-gray-600 sm:mb-10 sm:text-base md:text-xl">
                 Search through thesis and capstone works
             </p>
 
@@ -135,28 +136,25 @@ const downloadFile = (project) => {
                 No results found.
             </div>
 
-            <div
-                v-if="results.length > 0"
-                class="space-y-4 sm:space-y-5 lg:space-y-6"
-            >
+            <div v-if="results.length > 0" class="space-y-4 sm:space-y-6">
                 <div
                     v-for="hit in results"
                     :key="hit.id"
                     class="group rounded-2xl border-2 border-gray-100 bg-white p-4 shadow-md transition-all duration-300 hover:border-[#FFCD00] hover:shadow-xl sm:p-6 lg:p-8"
                 >
-                    <div
-                        class="mb-3 flex flex-wrap items-center gap-2 sm:gap-3"
-                    >
+                    <div class="mb-3 flex flex-wrap items-center gap-2 sm:gap-3">
                         <span
                             :class="[
-                                'inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11px] font-medium sm:px-4 sm:text-xs',
+                                'inline-flex max-w-full items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11px] font-medium sm:px-4 sm:text-xs',
                                 (hit.project_type || '').toLowerCase() === 'thesis'
                                     ? 'bg-[#FFCD00] text-[#0C4B05]'
                                     : 'bg-[#0C4B05] text-white',
                             ]"
                         >
-                            <FileText class="h-3.5 w-3.5" />
-                            {{ (hit.project_type || '').toLowerCase() === 'thesis' ? 'Thesis' : 'Capstone' }}
+                            <FileText class="h-3.5 w-3.5 shrink-0" />
+                            <span class="truncate">
+                                {{ (hit.project_type || '').toLowerCase() === 'thesis' ? 'Thesis' : 'Capstone' }}
+                            </span>
                         </span>
 
                         <span
@@ -167,24 +165,28 @@ const downloadFile = (project) => {
                     </div>
 
                     <h3
-                        class="mb-3 break-words text-xl font-semibold leading-snug text-gray-900 transition group-hover:text-[#0C4B05] sm:text-2xl"
+                        class="mb-3 break-words text-2xl font-semibold leading-tight text-gray-900 transition group-hover:text-[#0C4B05] sm:text-2xl md:text-3xl"
+                        style="overflow-wrap: anywhere; word-break: break-word;"
                     >
                         {{ hit.title }}
                     </h3>
 
-                    <p class="mb-4 break-words text-sm leading-relaxed text-gray-600 sm:text-base">
+                    <p
+                        class="mb-4 text-sm leading-relaxed text-gray-600 sm:text-base"
+                        style="overflow-wrap: anywhere; word-break: break-word;"
+                    >
                         {{ hit.snippet }}
                     </p>
 
-                    <div
-                        class="flex justify-end border-t border-gray-100 pt-4"
-                    >
-                        <button
-                            @click="viewDetails(hit)"
-                            class="w-full rounded-xl bg-[#0C4B05] px-5 py-2.5 text-sm font-medium text-white shadow-md transition-all duration-300 hover:bg-[#0C4B05]/90 hover:shadow-lg sm:w-auto sm:px-6"
-                        >
-                            View Details
-                        </button>
+                    <div class="border-t border-gray-100 pt-4">
+                        <div class="flex justify-end">
+                            <button
+                                @click="viewDetails(hit)"
+                                class="w-full rounded-xl bg-[#0C4B05] px-5 py-3 text-sm font-medium text-white shadow-md transition-all duration-300 hover:bg-[#0C4B05]/90 hover:shadow-lg sm:w-auto sm:min-w-[180px] sm:px-6 sm:text-base"
+                            >
+                                View Details
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -199,7 +201,8 @@ const downloadFile = (project) => {
             >
                 <div class="border-b p-4 sm:p-6">
                     <h2
-                        class="break-words text-lg font-semibold leading-snug text-gray-800 sm:text-2xl"
+                        class="text-lg font-semibold leading-snug text-gray-800 sm:text-2xl"
+                        style="overflow-wrap: anywhere; word-break: break-word;"
                     >
                         {{ selectedProject.title }}
                     </h2>
@@ -211,7 +214,8 @@ const downloadFile = (project) => {
                             Abstract
                         </h3>
                         <p
-                            class="break-words text-justify text-sm leading-relaxed text-gray-700 sm:text-base"
+                            class="text-justify text-sm leading-relaxed text-gray-700 sm:text-base"
+                            style="overflow-wrap: anywhere; word-break: break-word;"
                         >
                             {{ selectedProject.abstract }}
                         </p>
