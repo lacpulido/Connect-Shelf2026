@@ -32,16 +32,16 @@ const downloadPdf = (projectId: number) => {
 </script>
 
 <template>
-    <section class="px-6 py-16 pb-24">
+    <section class="px-4 py-10 pb-24 sm:px-6 sm:py-16">
         <div class="mx-auto max-w-7xl">
             <!-- HEADER -->
             <div class="mb-12 flex flex-col justify-between md:flex-row md:items-end">
                 <div>
-                    <h2 class="mb-3 text-5xl text-[#0C4B05]">
+                    <h2 class="mb-3 text-3xl text-[#0C4B05] sm:text-5xl">
                         Featured <span class="text-[#FFCD00]">Projects</span>
                     </h2>
 
-                    <p class="text-lg text-gray-600">
+                    <p class="text-base text-gray-600 sm:text-lg">
                         Discover the latest research and academic work
                     </p>
                 </div>
@@ -60,11 +60,11 @@ const downloadPdf = (projectId: number) => {
                 <div
                     v-for="project in props.projects"
                     :key="project.id"
-                    class="group rounded-2xl border-2 border-gray-100 bg-white p-8 shadow-md transition-all duration-300 hover:border-[#FFCD00] hover:shadow-xl"
+                    class="group rounded-2xl border-2 border-gray-100 bg-white p-5 shadow-md transition-all duration-300 hover:border-[#FFCD00] hover:shadow-xl sm:p-8"
                 >
                     <div class="mb-4 flex items-start justify-between">
                         <div class="flex-1">
-                            <div class="mb-3 flex items-center gap-3">
+                            <div class="mb-3 flex flex-wrap items-center gap-2 sm:gap-3">
                                 <span
                                     :class="[
                                         'inline-flex items-center gap-1.5 rounded-xl px-4 py-1.5 text-xs',
@@ -73,7 +73,7 @@ const downloadPdf = (projectId: number) => {
                                             : 'bg-[#0C4B05] text-white',
                                     ]"
                                 >
-                                    <FileText class="h-3.5 w-3.5" />
+                                    <FileText class="h-3.5 w-3.5 shrink-0" />
                                     {{ project.type === 'thesis' ? 'Thesis' : 'Capstone' }}
                                 </span>
 
@@ -85,12 +85,16 @@ const downloadPdf = (projectId: number) => {
                             </div>
 
                             <h3
-                                class="mb-3 text-2xl text-gray-900 transition-colors group-hover:text-[#0C4B05]"
+                                class="mb-3 text-xl leading-tight text-gray-900 transition-colors group-hover:text-[#0C4B05] sm:text-2xl"
+                                style="overflow-wrap: anywhere; word-break: break-word;"
                             >
                                 {{ project.title }}
                             </h3>
 
-                            <p class="mb-4 line-clamp-2 text-gray-600">
+                            <p
+                                class="mb-4 line-clamp-2 text-sm text-gray-600 sm:text-base"
+                                style="overflow-wrap: anywhere; word-break: break-word;"
+                            >
                                 {{ project.abstract }}
                             </p>
                         </div>
@@ -99,7 +103,7 @@ const downloadPdf = (projectId: number) => {
                     <div class="flex items-center justify-end border-t border-gray-100 pt-4">
                         <button
                             @click="viewDetails(project)"
-                            class="rounded-xl bg-[#0C4B05] px-6 py-2.5 text-white shadow-md transition-all duration-300 hover:bg-[#0C4B05]/90 hover:shadow-lg"
+                            class="w-full rounded-xl bg-[#0C4B05] px-6 py-2.5 text-white shadow-md transition-all duration-300 hover:bg-[#0C4B05]/90 hover:shadow-lg sm:w-auto"
                         >
                             View Details
                         </button>
@@ -111,24 +115,30 @@ const downloadPdf = (projectId: number) => {
         <!-- MODAL -->
         <div
             v-if="selectedProject"
-            class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4"
         >
             <div class="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl bg-white">
-                <div class="border-b p-6">
-                    <h2 class="text-2xl font-semibold text-gray-800">
+                <div class="border-b p-4 sm:p-6">
+                    <h2
+                        class="text-xl font-semibold text-gray-800 sm:text-2xl"
+                        style="overflow-wrap: anywhere; word-break: break-word;"
+                    >
                         {{ selectedProject.title }}
                     </h2>
                 </div>
 
-                <div class="space-y-6 p-6">
+                <div class="space-y-6 p-4 sm:p-6">
                     <div>
                         <h3 class="mb-3 font-semibold text-[#0C4B05]">Abstract</h3>
-                        <p class="text-justify leading-relaxed text-gray-700">
+                        <p
+                            class="text-justify leading-relaxed text-gray-700"
+                            style="overflow-wrap: anywhere; word-break: break-word;"
+                        >
                             {{ selectedProject.abstract }}
                         </p>
                     </div>
 
-                    <div class="flex gap-3">
+                    <div class="flex flex-col gap-3 sm:flex-row">
                         <button
                             @click="downloadPdf(selectedProject.id)"
                             class="flex-1 rounded-xl bg-[#0C4B05] py-3 text-white transition hover:opacity-90"
