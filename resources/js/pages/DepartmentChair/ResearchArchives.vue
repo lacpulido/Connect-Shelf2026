@@ -16,11 +16,11 @@ type Manuscript = {
     filename: string
     original_filename?: string | null
     abstract: string
-    status: string
     project_title: string | null
     adviser: string | null
     researchers: string[]
     created_at: string
+    status?: string | null
 }
 
 const props = defineProps<{
@@ -51,42 +51,9 @@ function shortTitle(title: string, limit = 55) {
         : capitalized
 }
 
-function openModal(paper: Manuscript) {
-    selectedPaper.value = paper
-    showModal.value = true
-    document.body.style.overflow = 'hidden'
-}
-
-function closeModal() {
-    showModal.value = false
-    selectedPaper.value = null
-    document.body.style.overflow = ''
-}
-
-function getDisplayStatus(status: string) {
-    if (!status) return 'Pending'
-
-    return status
-        .replace(/_/g, ' ')
-        .replace(/\b\w/g, (char) => char.toUpperCase())
-}
-
-function getStatusClass(status: string) {
-    const normalized = (status || '').toLowerCase()
-
-    if (normalized === 'approved') {
-        return 'bg-green-100 text-green-700 border border-green-200'
-    }
-
-    if (normalized === 'pending') {
-        return 'bg-yellow-100 text-yellow-700 border border-yellow-200'
-    }
-
-    if (normalized === 'rejected') {
-        return 'bg-red-100 text-red-700 border border-red-200'
-    }
-
-    return 'bg-gray-100 text-gray-700 border border-gray-200'
+function cleanFileName(filename: string | null | undefined): string {
+    if (!filename) return ''
+    return filename.replace(/^\d+_/, '')
 }
 
 function getAbstractParagraphs(abstractText: string | null | undefined): string[] {
@@ -100,11 +67,72 @@ function getAbstractParagraphs(abstractText: string | null | undefined): string[
         .filter((paragraph) => paragraph.length > 0)
 }
 
+function isApproved(paper: Manuscript): boolean {
+    return paper.status === 'approved'
+}
+
+function closeModal() {
+    showModal.value = false
+    selectedPaper.value = null
+    document.body.style.overflow = ''
+}
+
+function autoApproveOnReview(paper: Manuscript) {
+    if (paper.status === 'approved') return
+
+    approvingId.value = paper.id
+
+    router.post(
+        route('departmentchair.manuscript.approve', { id: paper.id }),
+        {},
+        {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: async () => {
+                paper.status = 'approved'
+
+                if (selectedPaper.value?.id === paper.id) {
+                    selectedPaper.value.status = 'approved'
+                }
+
+                successMessage.value = 'Manuscript reviewed and automatically approved successfully.'
+                await showSuccessAlert(
+                    'Approved',
+                    'This manuscript was reviewed and automatically approved.',
+                )
+
+                router.reload({ only: ['manuscripts'] })
+            },
+            onError: async () => {
+                await showErrorAlert(
+                    'Error',
+                    'Something went wrong while automatically approving the manuscript.',
+                )
+            },
+            onFinish: () => {
+                approvingId.value = null
+
+                setTimeout(() => {
+                    successMessage.value = null
+                }, 3000)
+            },
+        },
+    )
+}
+
+function openModal(paper: Manuscript) {
+    selectedPaper.value = paper
+    showModal.value = true
+    document.body.style.overflow = 'hidden'
+
+    autoApproveOnReview(paper)
+}
+
 async function approve(id: number) {
     const result = await confirmAction(
-        'Are you sure you want to accept?',
+        'Are you sure you want to approve?',
         'This action will approve the manuscript.',
-        'Yes, accept it',
+        'Yes, approve it',
         'Cancel',
     )
 
@@ -117,9 +145,22 @@ async function approve(id: number) {
         {},
         {
             preserveScroll: true,
+            preserveState: true,
             onSuccess: async () => {
-                successMessage.value = 'Manuscript approved successfully'
+                const paper = props.manuscripts.find(item => item.id === id)
+
+                if (paper) {
+                    paper.status = 'approved'
+                }
+
+                if (selectedPaper.value?.id === id) {
+                    selectedPaper.value.status = 'approved'
+                }
+
+                successMessage.value = 'Manuscript approved successfully.'
                 await showSuccessAlert('Approved', 'The manuscript has been approved successfully.')
+
+                router.reload({ only: ['manuscripts'] })
             },
             onError: async () => {
                 await showErrorAlert('Error', 'Something went wrong while approving the manuscript.')
@@ -212,19 +253,26 @@ async function approve(id: number) {
                                         {{ shortTitle(paper.title) }}
                                     </h2>
                                 </div>
+
+                                <span
+                                    v-if="isApproved(paper)"
+                                    class="shrink-0 rounded-full bg-white/20 px-3 py-1 text-xs font-semibold text-white"
+                                >
+                                    Approved
+                                </span>
                             </div>
                         </div>
 
                         <div class="flex flex-1 flex-col p-5">
                             <div class="space-y-3">
-                                <div class="flex items-start justify-between gap-3">
-                                    <span class="text-sm font-medium text-gray-500">File</span>
+                                <div class="flex justify-between">
+                                    <span class="text-sm text-gray-500">File</span>
                                     <a
                                         :href="route('departmentchair.manuscript.view', { id: paper.id })"
                                         target="_blank"
-                                        class="max-w-[60%] break-words text-right text-sm font-semibold text-[#0C4B05] hover:underline"
+                                        class="max-w-[60%] break-words text-right text-sm font-semibold text-green-700 hover:underline"
                                     >
-                                        {{ paper.original_filename ?? paper.filename }}
+                                        {{ cleanFileName(paper.original_filename ?? paper.filename) }}
                                     </a>
                                 </div>
 
@@ -239,16 +287,6 @@ async function approve(id: number) {
                                     <span class="text-sm font-medium text-gray-500">Submitted</span>
                                     <span class="text-right text-sm font-semibold text-gray-900">
                                         {{ formatDateTime(paper.created_at) }}
-                                    </span>
-                                </div>
-
-                                <div class="flex items-start justify-between gap-3">
-                                    <span class="text-sm font-medium text-gray-500">Status</span>
-                                    <span
-                                        class="inline-flex rounded-full px-3 py-1 text-xs font-semibold"
-                                        :class="getStatusClass(paper.status)"
-                                    >
-                                        {{ getDisplayStatus(paper.status) }}
                                     </span>
                                 </div>
                             </div>
@@ -287,37 +325,35 @@ async function approve(id: number) {
                             </div>
 
                             <div class="mt-5 border-t border-gray-100 pt-4">
-                                <template v-if="paper.status === 'approved'">
+                                <div v-if="isApproved(paper)">
                                     <button
                                         type="button"
-                                        class="w-full rounded-md bg-[#0C4B05] px-4 py-2 text-sm text-white hover:opacity-90"
+                                        class="w-full rounded-md bg-gray-600 px-4 py-2 text-sm text-white hover:opacity-90"
                                         @click="openModal(paper)"
                                     >
                                         View Details
                                     </button>
-                                </template>
+                                </div>
 
-                                <template v-else>
-                                    <div class="grid grid-cols-2 gap-2">
-                                        <button
-                                            type="button"
-                                            class="rounded-md bg-gray-600 px-4 py-2 text-sm text-white hover:opacity-90"
-                                            @click="openModal(paper)"
-                                        >
-                                            View Details
-                                        </button>
+                                <div v-else class="grid grid-cols-2 gap-2">
+                                    <button
+                                        type="button"
+                                        class="rounded-md bg-gray-600 px-4 py-2 text-sm text-white hover:opacity-90"
+                                        @click="openModal(paper)"
+                                    >
+                                        View Details
+                                    </button>
 
-                                        <button
-                                            type="button"
-                                            class="rounded-md bg-[#0C4B05] px-4 py-2 text-sm text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
-                                            :disabled="approvingId === paper.id"
-                                            @click="approve(paper.id)"
-                                        >
-                                            <span v-if="approvingId === paper.id">Processing...</span>
-                                            <span v-else>Approve</span>
-                                        </button>
-                                    </div>
-                                </template>
+                                    <button
+                                        type="button"
+                                        class="rounded-md bg-[#0C4B05] px-4 py-2 text-sm text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
+                                        :disabled="approvingId === paper.id"
+                                        @click="approve(paper.id)"
+                                    >
+                                        <span v-if="approvingId === paper.id">Processing...</span>
+                                        <span v-else>Approve</span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -354,6 +390,24 @@ async function approve(id: number) {
 
                         <template v-if="selectedPaper">
                             <div class="px-6 py-5">
+                                <div class="mb-4 flex items-center justify-between">
+                                    <div>
+                                        <h3 class="text-base font-semibold text-gray-900">
+                                            Review Summary
+                                        </h3>
+                                        <p class="mt-1 text-sm text-gray-500">
+                                            Opening this manuscript automatically marks it as approved.
+                                        </p>
+                                    </div>
+
+                                    <span
+                                        v-if="isApproved(selectedPaper)"
+                                        class="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700"
+                                    >
+                                        Approved
+                                    </span>
+                                </div>
+
                                 <div class="rounded-2xl border border-gray-200 bg-gray-50 p-5">
                                     <div class="mb-4">
                                         <h3 class="text-sm font-semibold text-gray-800">

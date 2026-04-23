@@ -13,7 +13,7 @@ import { SECTION_DEFINITIONS } from '@/constants/submissionSections'
 import type { Project, Submission } from '@/types'
 import { parseSubmissionSlug } from '@/utils/parseSubmissionSlug'
 import { Head, Link, router, usePage, usePoll } from '@inertiajs/vue3'
-import { ChevronDown, ChevronUp, SquarePen } from 'lucide-vue-next'
+import { ChevronDown, ChevronUp, FileText, SquarePen } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 
 type PageProps = {
@@ -156,9 +156,7 @@ usePoll(2000, {
             </header>
 
             <div class="space-y-6 p-6">
-                <div
-                    class="rounded-2xl border border-gray-200 bg-white px-6 py-5 shadow-sm"
-                >
+                <div class="rounded-2xl border border-gray-200 bg-white px-6 py-5 shadow-sm">
                     <h1 class="text-xl font-semibold text-gray-900">
                         {{ project?.title ?? 'Project Submissions' }}
                     </h1>
@@ -166,14 +164,14 @@ usePoll(2000, {
                         Review submitted project documents and provide feedback.
                     </p>
 
-                    <button
-                        v-if="project"
-                        type="button"
-                        @click="router.visit(route('faculty.projects'))"
-                        class="mt-3 text-sm text-gray-600 transition hover:text-black"
-                    >
-                        ← Back to All Projects
-                    </button>
+                   <button
+    v-if="project"
+    type="button"
+    @click="router.visit(route('faculty.projects'))"
+    class="mt-3 inline-flex items-center text-sm font-medium text-gray-600 transition hover:text-[#0C4B05]"
+>
+    ← Back to All Projects
+</button>
                 </div>
 
                 <div
@@ -221,9 +219,7 @@ usePoll(2000, {
                                     v-for="(version, index) in section.documents"
                                     :key="version.id"
                                 >
-                                    <div
-                                        class="rounded-2xl border border-gray-200 bg-white p-5 transition hover:shadow-sm"
-                                    >
+                                    <div class="rounded-2xl border border-gray-200 bg-white p-5 transition hover:shadow-sm">
                                         <div class="flex flex-wrap items-center justify-between gap-2">
                                             <div class="flex items-center gap-2">
                                                 <span class="text-sm font-medium text-gray-900">
@@ -246,15 +242,27 @@ usePoll(2000, {
                                             </span>
                                         </div>
 
-                                        <div class="mt-3">
-                                            <a
-                                                :href="resolveDocumentUrl(version)"
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                class="break-words text-sm font-medium text-gray-900 hover:underline"
-                                            >
-                                                {{ version.filename }}
-                                            </a>
+                                        <div class="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                                            <div class="flex items-start gap-3">
+                                                <div class="mt-0.5 rounded-xl bg-white p-2 shadow-sm">
+                                                    <FileText class="h-5 w-5 text-[#0C4B05]" />
+                                                </div>
+
+                                                <div class="min-w-0 flex-1">
+                                                    <a
+                                                        :href="resolveDocumentUrl(version)"
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        class="block break-words text-sm font-semibold text-gray-900 hover:text-[#0C4B05] hover:underline"
+                                                    >
+                                                        {{ version.filename }}
+                                                    </a>
+
+                                                    <p class="mt-1 text-xs text-gray-500">
+                                                        Uploaded on {{ formatDateTime(version.created_at) }}
+                                                    </p>
+                                                </div>
+                                            </div>
                                         </div>
 
                                         <div class="mt-4 border-t border-gray-200 pt-3">
@@ -283,7 +291,7 @@ usePoll(2000, {
                                                 v-if="!version.comments?.length"
                                                 type="button"
                                                 @click="toggleReview(version.id)"
-                                                class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
+                                                class="inline-flex min-w-[140px] items-center justify-center gap-2 rounded-md bg-[#0C4B05] px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90"
                                             >
                                                 <SquarePen class="h-4 w-4" />
                                                 {{ activeReview === version.id ? 'Cancel Review' : 'Add Review' }}
@@ -300,39 +308,39 @@ usePoll(2000, {
                                                         open: section.key,
                                                     })
                                                 })()"
-                                                class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
+                                                class="inline-flex min-w-[140px] items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
                                             >
                                                 View History
                                             </Link>
                                         </div>
 
-                                       <div v-if="activeReview === version.id" class="mt-4">
-    <textarea
-        v-model="reviewComment"
-        rows="4"
-        class="w-full rounded-xl border border-gray-300 p-3 text-sm outline-none transition focus:border-gray-400"
-        placeholder="Enter your feedback or suggestions..."
-    />
+                                        <div v-if="activeReview === version.id" class="mt-4">
+                                            <textarea
+                                                v-model="reviewComment"
+                                                rows="4"
+                                                class="w-full rounded-xl border border-gray-300 p-3 text-sm outline-none transition focus:border-gray-400"
+                                                placeholder="Enter your feedback or suggestions..."
+                                            />
 
-    <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <select
-            v-model="reviewDecision"
-            class="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 outline-none"
-        >
-            <option value="approved">Approve Submission</option>
-            <option value="needs_revision">Request Revisions</option>
-        </select>
+                                            <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                                <select
+                                                    v-model="reviewDecision"
+                                                    class="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 outline-none"
+                                                >
+                                                    <option value="approved">Approve Submission</option>
+                                                    <option value="needs_revision">Request Revisions</option>
+                                                </select>
 
-        <button
-            type="button"
-            :disabled="submitting"
-            @click="submitReview(version.slug)"
-            class="rounded-lg bg-[#0C4B05] px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-            {{ submitting ? 'Submitting...' : 'Submit Review' }}
-        </button>
-    </div>
-</div>
+                                                <button
+                                                    type="button"
+                                                    :disabled="submitting"
+                                                    @click="submitReview(version.slug)"
+                                                    class="inline-flex min-w-[140px] items-center justify-center rounded-md bg-[#0C4B05] px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                                                >
+                                                    {{ submitting ? 'Submitting...' : 'Submit Review' }}
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

@@ -17,6 +17,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
     (e: 'close'): void
+    (e: 'submitted'): void
 }>()
 
 const { showSuccessAlert, showWarningAlert, showErrorAlert } = useAlerts()
@@ -72,8 +73,9 @@ const submitReschedule = () => {
         {
             preserveScroll: true,
             onSuccess: async () => {
+                emit('submitted')
                 emit('close')
-                await showSuccessAlert('Success', 'Request submitted successfully.')
+                await showSuccessAlert('Success', 'Reschedule request submitted successfully.')
             },
             onError: async () => {
                 await showErrorAlert('Error', 'Failed to submit reschedule request.')
@@ -94,8 +96,6 @@ const submitReschedule = () => {
             @click.self="closeModal"
         >
             <div class="mt-10 w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/5">
-                
-                <!-- HEADER -->
                 <div class="flex items-center justify-between border-b border-gray-100 px-6 py-4">
                     <div>
                         <h2 class="text-xl font-bold text-[#0C4B05]">
@@ -106,7 +106,6 @@ const submitReschedule = () => {
                         </p>
                     </div>
 
-                    <!-- CLOSE BUTTON (updated) -->
                     <button
                         type="button"
                         @click="closeModal"
@@ -117,7 +116,6 @@ const submitReschedule = () => {
                     </button>
                 </div>
 
-                <!-- BODY -->
                 <div class="px-6 py-5">
                     <div class="rounded-2xl border border-gray-200 bg-gray-50 p-5">
                         <div class="space-y-4">
@@ -154,13 +152,12 @@ const submitReschedule = () => {
                         </div>
                     </div>
 
-                    <!-- ACTION BUTTON -->
                     <div class="mt-5 flex justify-end">
                         <button
                             type="button"
                             @click="submitReschedule"
                             :disabled="submitting"
-                            class="rounded-md bg-[#0C4B05] px-4 py-2 text-sm text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                            class="rounded-md bg-[#0C4B05] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             {{ submitting ? 'Submitting...' : 'Submit Request' }}
                         </button>

@@ -17,8 +17,24 @@ class NotificationController extends Controller
 
         return Notification::where('user_id', $user->id)
             ->latest()
-            ->take(5)
-            ->get();
+            ->take(10)
+            ->get()
+            ->map(function ($notification) {
+                return [
+                    'id' => $notification->id,
+                    'title' => $notification->title,
+                    'message' => $notification->message,
+                    'created_at' => $notification->created_at,
+                    'status' => $notification->status,
+                    'type' => $notification->type,
+                    'reference_id' => $notification->reference_id,
+                    'reference_type' => $notification->reference_type,
+                    'modal_title' => $this->resolveModalTitle($notification),
+                    'modal_message' => $this->resolveModalMessage($notification),
+                    'action_label' => $this->resolveActionLabel($notification),
+                    'action_url' => $this->resolveActionUrl($notification),
+                ];
+            });
     }
 
     public function markAsRead($id)
@@ -76,7 +92,7 @@ class NotificationController extends Controller
 
         $schedule = Schedule::with('project')->find($notification->reference_id);
 
-        if (!$schedule) {
+        if (! $schedule) {
             throw ValidationException::withMessages([
                 'notification' => 'Schedule not found.',
             ]);
@@ -90,7 +106,6 @@ class NotificationController extends Controller
 
         DB::transaction(function () use ($validated, $notification, $schedule, $user, $actorName, $projectTitle, $projectId) {
             if ($validated['action'] === 'confirm') {
-                // Mark original schedule notification as read
                 $notification->update([
                     'status' => 'READ',
                 ]);
@@ -99,8 +114,6 @@ class NotificationController extends Controller
                     'status' => 'confirmed',
                 ]);
 
-                // Create a NEW notification for the current user
-                // so created_at is fresh and shows "Just now"
                 Notification::create([
                     'user_id' => $user->id,
                     'title' => 'Schedule Confirmed',
@@ -111,8 +124,7 @@ class NotificationController extends Controller
                     'status' => 'UNREAD',
                 ]);
 
-                // Notify the creator of the schedule
-                if (!empty($schedule->created_by) && (int) $schedule->created_by !== (int) $user->id) {
+                if (! empty($schedule->created_by) && (int) $schedule->created_by !== (int) $user->id) {
                     Notification::create([
                         'user_id' => $schedule->created_by,
                         'title' => 'Schedule Confirmed',
@@ -134,7 +146,6 @@ class NotificationController extends Controller
                     ]);
                 }
 
-                // Mark original schedule notification as read
                 $notification->update([
                     'status' => 'READ',
                 ]);
@@ -143,7 +154,6 @@ class NotificationController extends Controller
                     'status' => 'reschedule_requested',
                 ]);
 
-                // Create a NEW notification for the current user
                 Notification::create([
                     'user_id' => $user->id,
                     'title' => 'Reschedule Requested',
@@ -154,8 +164,7 @@ class NotificationController extends Controller
                     'status' => 'UNREAD',
                 ]);
 
-                // Notify the creator of the schedule
-                if (!empty($schedule->created_by) && (int) $schedule->created_by !== (int) $user->id) {
+                if (! empty($schedule->created_by) && (int) $schedule->created_by !== (int) $user->id) {
                     Notification::create([
                         'user_id' => $schedule->created_by,
                         'title' => 'Reschedule Request Received',
@@ -170,5 +179,41 @@ class NotificationController extends Controller
         });
 
         return back()->with('success', 'Schedule response submitted successfully.');
+    }
+
+    private function resolveModalTitle(Notification $notification): string
+    {
+        return match ($notification->type) {
+            'focal_assignment' => 'Focal Person Assignment',
+            'schedule' => 'Defense Schedule',
+            'schedule_response' => 'Schedule Update',
+            default => $notification->title ?? 'Notification',
+        };
+    }
+
+    private function resolveModalMessage(Notification $notification): string
+    {
+        return match ($notification->type) {
+            'focal_assignment' => 'You have been assigned as the Focal Person of your department.',
+            default => $notification->message ?? 'You have a new notification.',
+        };
+    }
+
+    private function resolveActionLabel(Notification $notification): ?string
+    {
+        return match ($notification->type) {
+            'focal_assignment' => 'Go to Focal Person Page',
+            'schedule', 'schedule_response' => 'Go to Defense Schedules',
+            default => null,
+        };
+    }
+
+    private function resolveActionUrl(Notification $notification): ?string
+    {
+        return match ($notification->type) {
+            'focal_assignment' => route('focalperson.projects'),
+            'schedule', 'schedule_response' => route('faculty.defense-schedules.index'),
+            default => null,
+        };
     }
 }

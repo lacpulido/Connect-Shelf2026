@@ -3,7 +3,7 @@ import { TransitionRoot } from '@headlessui/vue'
 import { Head, useForm, usePage } from '@inertiajs/vue3'
 import type { PageProps as InertiaPageProps } from '@inertiajs/core'
 
-import DeleteUser from '@/components/DeleteUser.vue'
+
 import HeadingSmall from '@/components/HeadingSmall.vue'
 import InputError from '@/components/InputError.vue'
 import { Button } from '@/components/ui/button'

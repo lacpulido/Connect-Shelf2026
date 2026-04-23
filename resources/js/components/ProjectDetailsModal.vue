@@ -91,10 +91,6 @@ const formatDate = (date: string | null | undefined) => {
                         {{ project?.title }}
                     </h1>
 
-                    <p class="text-sm leading-relaxed text-gray-600">
-                        {{ project?.description || 'No description provided.' }}
-                    </p>
-
                     <div>
                         <h3 class="mb-2 font-semibold text-[#0C4B05]">
                             Researchers

@@ -64,8 +64,6 @@ const confirmSchedule = async () => {
             @click.self="closeModal"
         >
             <div class="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/5">
-                
-                <!-- HEADER -->
                 <div class="flex items-center justify-between border-b border-gray-100 px-6 py-4">
                     <div>
                         <h2 class="text-xl font-bold text-[#0C4B05]">
@@ -76,7 +74,6 @@ const confirmSchedule = async () => {
                         </p>
                     </div>
 
-                    <!-- CLOSE BUTTON (updated style) -->
                     <button
                         type="button"
                         @click="closeModal"
@@ -87,7 +84,6 @@ const confirmSchedule = async () => {
                     </button>
                 </div>
 
-                <!-- BODY -->
                 <div class="px-6 py-5">
                     <div class="rounded-2xl border border-gray-200 bg-gray-50 p-5">
                         <div class="mb-4">
@@ -129,13 +125,12 @@ const confirmSchedule = async () => {
                         </div>
                     </div>
 
-                    <!-- ACTION BUTTON -->
                     <div class="mt-5 flex justify-end gap-3">
                         <button
                             type="button"
                             @click="confirmSchedule"
                             :disabled="submitting"
-                            class="rounded-md bg-[#0C4B05] px-4 py-2 text-sm text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                            class="rounded-md bg-[#0C4B05] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             {{ submitting ? 'Confirming...' : 'Confirm Schedule' }}
                         </button>

@@ -9,6 +9,7 @@ use App\Services\NotificationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class FinalManuscriptReviewController extends Controller
@@ -21,59 +22,66 @@ class FinalManuscriptReviewController extends Controller
             $manuscript = ProjectManuscript::findOrFail($id);
 
             if ($manuscript->status === 'approved') {
+                DB::commit();
+
                 return back()->with('info', 'Manuscript has already been approved.');
             }
 
-            // Approve manuscript first
-            $manuscript->update([
-                'status' => 'approved',
+            // Direct DB update para siguradong masasave
+            $updated = ProjectManuscript::where('id', $id)->update([
+                'status'     => 'approved',
+                'updated_at' => now(),
             ]);
 
-            // Get BOTH student + adviser BEFORE project delete
-            [$studentId, $adviserId] = $this->completeAndArchiveProject($manuscript->project_id);
+            if (! $updated) {
+                throw new \Exception('Failed to update manuscript status.');
+            }
 
-            // Soft delete manuscript too
-            $manuscript->delete();
+            // Re-fetch from database to verify
+            $manuscript = ProjectManuscript::findOrFail($id);
+
+            if ($manuscript->status !== 'approved') {
+                throw new \Exception('Manuscript status is still not approved after update.');
+            }
+
+            [$studentId, $adviserId] = $this->completeProject($manuscript->project_id);
 
             DB::commit();
 
-            // Re-sync searchable record after soft delete
-            $manuscript->searchable();
+            if (method_exists($manuscript, 'searchable')) {
+                $manuscript->searchable();
+            }
 
-            // Notify Student
             if ($studentId) {
                 $this->notifyStudent($studentId, $manuscript);
             }
 
-            // Notify Adviser
             if ($adviserId) {
                 $this->notifyAdviser($adviserId, $manuscript);
             }
 
-            return back()->with(
-                'success',
-                'Manuscript approved, archived, project completed, and adviser notified.'
-            );
+            return back()->with('success', 'Manuscript approved successfully.');
         } catch (\Throwable $e) {
             DB::rollBack();
+
+            Log::error('Final manuscript approval failed.', [
+                'manuscript_id' => $id,
+                'error' => $e->getMessage(),
+            ]);
 
             return back()->with('error', 'Failed: ' . $e->getMessage());
         }
     }
 
-    /**
-     * COMPLETE + ARCHIVE PROJECT
-     * Returns: [student_id, adviser_id]
-     */
-    private function completeAndArchiveProject(?int $projectId): array
+    private function completeProject(?int $projectId): array
     {
-        if (!$projectId) {
+        if (! $projectId) {
             return [null, null];
         }
 
         $project = Project::find($projectId);
 
-        if (!$project) {
+        if (! $project) {
             return [null, null];
         }
 
@@ -84,9 +92,6 @@ class FinalManuscriptReviewController extends Controller
             'status'       => 'Completed',
             'completed_at' => now(),
         ]);
-
-        // Soft delete project
-        $project->delete();
 
         return [$studentId, $adviserId];
     }
@@ -107,7 +112,7 @@ class FinalManuscriptReviewController extends Controller
     {
         NotificationService::send(
             $adviserId,
-            'Manuscript Approved (Adviser)',
+            'Manuscript Approved ',
             'The manuscript of "' . $manuscript->title . '" has been approved.',
             'manuscript_approved_adviser',
             $manuscript->id,
@@ -118,7 +123,7 @@ class FinalManuscriptReviewController extends Controller
     public function view(Request $request, int $id)
     {
         $manuscript = ProjectManuscript::withTrashed()->findOrFail($id);
-        $filePath   = 'final_manuscripts/' . $manuscript->filename;
+        $filePath = 'final_manuscripts/' . $manuscript->filename;
 
         abort_unless(Storage::exists($filePath), 404, 'File not found.');
 
@@ -127,7 +132,7 @@ class FinalManuscriptReviewController extends Controller
         return $request->has('download')
             ? response()->download($fullPath, $manuscript->filename)
             : response()->file($fullPath, [
-                'Content-Type'        => 'application/pdf',
+                'Content-Type' => 'application/pdf',
                 'Content-Disposition' => 'inline; filename="' . $manuscript->filename . '"',
             ]);
     }

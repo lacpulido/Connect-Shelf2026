@@ -19,12 +19,12 @@ class CapstoneProjectController extends Controller
             ->with([
                 'user' => fn ($query) => $query->withTrashed(),
                 'department',
-                'manuscript' => fn ($query) => $query->withTrashed(),
+                'manuscript' => fn ($query) => $query->withTrashed()->where('status', 'approved'),
                 'researchers' => fn ($query) => $query->withTrashed(),
             ])
             ->where('project_type', 'Capstone')
             ->whereHas('manuscript', function ($query) {
-                $query->withTrashed();
+                $query->withTrashed()->where('status', 'approved');
             })
             ->when($selectedYear, function ($query) use ($selectedYear) {
                 $query->where('academic_year', $selectedYear);
@@ -67,7 +67,7 @@ class CapstoneProjectController extends Controller
             ->withTrashed()
             ->where('project_type', 'Capstone')
             ->whereHas('manuscript', function ($query) {
-                $query->withTrashed();
+                $query->withTrashed()->where('status', 'approved');
             })
             ->whereNotNull('academic_year')
             ->select('academic_year')
@@ -92,13 +92,13 @@ class CapstoneProjectController extends Controller
             ->with([
                 'user' => fn ($query) => $query->withTrashed(),
                 'department',
-                'manuscript' => fn ($query) => $query->withTrashed(),
+                'manuscript' => fn ($query) => $query->withTrashed()->where('status', 'approved'),
                 'researchers' => fn ($query) => $query->withTrashed(),
             ])
             ->where('slug', $slug)
             ->where('project_type', 'Capstone')
             ->whereHas('manuscript', function ($query) {
-                $query->withTrashed();
+                $query->withTrashed()->where('status', 'approved');
             })
             ->first();
 

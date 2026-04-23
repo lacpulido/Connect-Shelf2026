@@ -188,8 +188,20 @@ const hasRescheduleRequest = (project: Project) => {
     )
 }
 
-const shouldShowScheduleButton = (project: Project) => !hasSchedule(project) || hasRescheduleRequest(project)
-const getScheduleButtonLabel = (project: Project) => hasRescheduleRequest(project) ? 'Reschedule' : 'Set Schedule'
+const isScheduleSubmitted = (project: Project) => hasSchedule(project) && !hasRescheduleRequest(project)
+
+const shouldShowScheduleButton = (project: Project) =>
+    !hasSchedule(project) || hasRescheduleRequest(project) || isScheduleSubmitted(project)
+
+const getScheduleButtonLabel = (project: Project) => {
+    if (hasRescheduleRequest(project)) return 'Reschedule'
+    if (isScheduleSubmitted(project)) return 'Schedule Submitted'
+    return 'Set Schedule'
+}
+
+const isScheduleButtonDisabled = (project: Project) =>
+    isScheduleSubmitted(project) && !hasRescheduleRequest(project)
+
 const shouldShowAssignPanelistButton = (project: Project) => !hasReachedMaxPanelists(project)
 
 const getFullName = (user?: User | null) => {
@@ -213,10 +225,14 @@ const primaryButtonClass =
 const secondaryButtonClass =
     `${baseButtonClass} border border-gray-300 bg-white text-gray-700 focus:ring-gray-300`
 
+const submittedButtonClass =
+    'col-span-2 flex h-11 w-full cursor-not-allowed items-center justify-center rounded-md border border-gray-300 bg-white px-4 text-sm font-medium text-gray-700 opacity-90 focus:ring-gray-300'
 const getScheduleButtonClass = (project: Project) =>
     hasRescheduleRequest(project)
-        ? `${baseButtonClass} border border-amber-300 bg-amber-50 text-amber-700 focus:ring-amber-200`
-        : primaryButtonClass
+        ? `${baseButtonClass} border border-amber-400 bg-amber-50 text-amber-700 focus:ring-amber-200`
+        : isScheduleSubmitted(project)
+          ? submittedButtonClass
+          : primaryButtonClass
 </script>
 
 <template>
@@ -300,7 +316,7 @@ const getScheduleButtonClass = (project: Project) =>
                                         <p class="truncate text-base font-semibold text-gray-900">
                                             {{ getFullName(project.user) }}
                                         </p>
-                                        <p class="truncate text-sm text-gray-500">Student Leader</p>
+                                        <p class="truncate text-sm text-gray-500">Leader</p>
                                     </div>
                                 </div>
                             </div>
@@ -309,50 +325,9 @@ const getScheduleButtonClass = (project: Project) =>
                                 v-if="project.status?.toLowerCase() !== 'completed'"
                                 class="border-t border-gray-100 pt-4"
                             >
-                                <div v-if="canViewDetails(project)" class="space-y-3">
+                                <div class="space-y-3">
                                     <div
-                                        v-if="shouldShowScheduleButton(project)"
-                                        class="grid grid-cols-2 gap-2.5"
-                                    >
-                                        <button
-                                            type="button"
-                                            @click="openScheduleModal(project)"
-                                            :class="getScheduleButtonClass(project)"
-                                        >
-                                            {{ getScheduleButtonLabel(project) }}
-                                        </button>
-
-                                        <button
-                                            type="button"
-                                            @click="openDetailsModal(project)"
-                                            :class="secondaryButtonClass"
-                                        >
-                                            View Details
-                                        </button>
-                                    </div>
-
-                                    <div v-else class="grid grid-cols-1">
-                                        <button
-                                            type="button"
-                                            @click="openDetailsModal(project)"
-                                            :class="secondaryButtonClass"
-                                        >
-                                            View Details
-                                        </button>
-                                    </div>
-
-                                    <button
-                                        v-if="shouldShowAssignPanelistButton(project)"
-                                        type="button"
-                                        @click="openPanelistModal(project)"
-                                        :class="secondaryButtonClass"
-                                    >
-                                        Assign Panelist
-                                    </button>
-                                </div>
-
-                                <div v-else>
-                                    <div
+                                        v-if="shouldShowScheduleButton(project) || shouldShowAssignPanelistButton(project)"
                                         :class="[
                                             'grid gap-2.5',
                                             shouldShowScheduleButton(project) && shouldShowAssignPanelistButton(project)
@@ -363,7 +338,8 @@ const getScheduleButtonClass = (project: Project) =>
                                         <button
                                             v-if="shouldShowScheduleButton(project)"
                                             type="button"
-                                            @click="openScheduleModal(project)"
+                                            @click="!isScheduleButtonDisabled(project) && openScheduleModal(project)"
+                                            :disabled="isScheduleButtonDisabled(project)"
                                             :class="getScheduleButtonClass(project)"
                                         >
                                             {{ getScheduleButtonLabel(project) }}
@@ -378,12 +354,21 @@ const getScheduleButtonClass = (project: Project) =>
                                             Assign Panelist
                                         </button>
                                     </div>
+
+                                    <button
+                                        v-if="canViewDetails(project)"
+                                        type="button"
+                                        @click="openDetailsModal(project)"
+                                        :class="secondaryButtonClass"
+                                    >
+                                        View Details
+                                    </button>
                                 </div>
                             </div>
 
                             <div v-else class="border-t border-gray-100 pt-4">
                                 <div
-                                    class="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-center text-sm font-semibold text-green-700"
+                                    :class="secondaryButtonClass + ' w-full cursor-not-allowed text-center opacity-70'"
                                 >
                                     This project is already completed.
                                 </div>

@@ -1,63 +1,49 @@
 <script setup lang="ts">
-import AppSidebar from '@/components/AppSidebar.vue'
-import AppButton from '@/components/AppButton.vue'
-import PageSectionHeader from '@/components/PageSectionHeader.vue'
-import { Breadcrumb, BreadcrumbItem, BreadcrumbList } from '@/components/ui/breadcrumb'
-import { Separator } from '@/components/ui/separator'
-import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
-import { useDisplayFormatters } from '@/composables/useDisplayFormatter'
-import { useAlerts } from '@/composables/useAlerts'
-import type { User, Role, PaginatedUsers } from '@/types'
-import { Head, router } from '@inertiajs/vue3'
-import { computed, ref } from 'vue'
-import { FolderOpen } from 'lucide-vue-next'
-import {
-    Empty,
-    EmptyContent,
-    EmptyDescription,
-    EmptyHeader,
-    EmptyMedia,
-    EmptyTitle,
-} from '@/components/ui/empty'
+import AppButton from '@/components/AppButton.vue';
+import AppSidebar from '@/components/AppSidebar.vue';
+import PageSectionHeader from '@/components/PageSectionHeader.vue';
+import { Breadcrumb, BreadcrumbItem, BreadcrumbList } from '@/components/ui/breadcrumb';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { Separator } from '@/components/ui/separator';
+import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
+import { useAlerts } from '@/composables/useAlerts';
+import { useDisplayFormatters } from '@/composables/useDisplayFormatter';
+import type { PaginatedUsers, Role, User } from '@/types';
+import { Head, router } from '@inertiajs/vue3';
+import { FolderOpen } from 'lucide-vue-next';
+import { computed, ref } from 'vue';
 
 const props = defineProps<{
-    users: PaginatedUsers
-    focalRoleId: number
-    hasExistingFocal: boolean
-}>()
+    users: PaginatedUsers;
+    focalRoleId: number;
+    hasExistingFocal: boolean;
+}>();
 
-const loadingId = ref<number | null>(null)
+const loadingId = ref<number | null>(null);
 
-const { fullName, initials } = useDisplayFormatters()
+const { fullName, initials } = useDisplayFormatters();
 
-const {
-    showSuccessAlert,
-    showErrorAlert,
-    confirmAction,
-} = useAlerts()
+const { showSuccessAlert, showErrorAlert, confirmAction } = useAlerts();
 
-const isFocal = (user: User & { roles?: Role[] }) =>
-    user.roles?.some((role) => role.id === props.focalRoleId) ?? false
+const isFocal = (user: User & { roles?: Role[] }) => user.roles?.some((role) => role.id === props.focalRoleId) ?? false;
 
-const getUserFullName = (user: User) => fullName(user, 'No name')
-const getUserInitials = (user: User) => initials(user, 'NA')
+const getUserFullName = (user: User) => fullName(user, 'No name');
+const getUserInitials = (user: User) => initials(user, 'NA');
 
 const toggleFocalRole = async (userId: number, user: User & { roles?: Role[] }) => {
-    if (loadingId.value !== null) return
+    if (loadingId.value !== null) return;
 
-    const removing = isFocal(user)
+    const removing = isFocal(user);
 
     const confirm = await confirmAction(
         removing ? 'Remove Role?' : 'Assign Role?',
-        removing
-            ? 'Are you sure you want to remove this user as Focal Person?'
-            : 'Assign this user as Focal Person?',
+        removing ? 'Are you sure you want to remove this user as Focal Person?' : 'Assign this user as Focal Person?',
         removing ? 'Remove' : 'Assign',
-    )
+    );
 
-    if (!confirm.isConfirmed) return
+    if (!confirm.isConfirmed) return;
 
-    loadingId.value = userId
+    loadingId.value = userId;
 
     router.post(
         route('departmentchair.toggle-focal', { user: userId }),
@@ -65,36 +51,26 @@ const toggleFocalRole = async (userId: number, user: User & { roles?: Role[] }) 
         {
             preserveScroll: true,
             onSuccess: () => {
-                showSuccessAlert(
-                    'Success',
-                    removing
-                        ? 'Focal role removed successfully.'
-                        : 'Focal role assigned successfully.',
-                )
+                showSuccessAlert('Success', removing ? 'Focal role removed successfully.' : 'Focal role assigned successfully.');
 
-                router.reload({ only: ['users', 'hasExistingFocal'] })
+                router.reload({ only: ['users', 'hasExistingFocal'] });
             },
             onError: () => {
-                showErrorAlert(
-                    'Error',
-                    removing
-                        ? 'Failed to remove role.'
-                        : 'Failed to assign role.',
-                )
+                showErrorAlert('Error', removing ? 'Failed to remove role.' : 'Failed to assign role.');
             },
             onFinish: () => {
-                loadingId.value = null
+                loadingId.value = null;
             },
         },
-    )
-}
+    );
+};
 
-const paginationLinks = computed(() => props.users.links)
+const paginationLinks = computed(() => props.users.links);
 
 const goToPage = (url: string | null) => {
-    if (!url) return
-    router.get(url, {}, { preserveScroll: true, preserveState: true })
-}
+    if (!url) return;
+    router.get(url, {}, { preserveScroll: true, preserveState: true });
+};
 </script>
 
 <template>
@@ -116,16 +92,10 @@ const goToPage = (url: string | null) => {
             </header>
 
             <div class="space-y-6 p-6">
-                <PageSectionHeader
-                    title="Faculty Members"
-                    description="Assign or remove the focal faculty role."
-                />
+                <PageSectionHeader title="Faculty Members" description="Assign or remove the focal faculty role." />
 
                 <!-- EMPTY STATE -->
-                <div
-                    v-if="!props.users.data.length"
-                    class="flex min-h-[60vh] items-center justify-center"
-                >
+                <div v-if="!props.users.data.length" class="flex min-h-[60vh] items-center justify-center">
                     <Empty class="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-sm">
                         <EmptyHeader>
                             <EmptyMedia variant="icon">
@@ -135,19 +105,14 @@ const goToPage = (url: string | null) => {
 
                         <EmptyTitle>No Faculty Found</EmptyTitle>
 
-                        <EmptyDescription>
-                            There are currently no faculty members available.
-                        </EmptyDescription>
+                        <EmptyDescription> There are currently no faculty members available. </EmptyDescription>
 
                         <EmptyContent />
                     </Empty>
                 </div>
 
                 <!-- LIST -->
-                <div
-                    v-else
-                    class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3"
-                >
+                <div v-else class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                     <div
                         v-for="user in props.users.data"
                         :key="user.id"
@@ -188,19 +153,11 @@ const goToPage = (url: string | null) => {
                                     {{ role.name }}
                                 </span>
 
-                                <span
-                                    v-if="!user.roles || user.roles.length === 0"
-                                    class="text-xs text-gray-400"
-                                >
-                                    No roles assigned
-                                </span>
+                                <span v-if="!user.roles || user.roles.length === 0" class="text-xs text-gray-400"> No roles assigned </span>
                             </div>
                         </div>
 
-                        <div
-                            v-if="isFocal(user) || !props.hasExistingFocal"
-                            class="mt-auto pt-4"
-                        >
+                        <div v-if="isFocal(user) || !props.hasExistingFocal" class="mt-auto pt-4">
                             <AppButton
                                 :variant="isFocal(user) ? 'danger' : 'primary'"
                                 :disabled="loadingId === user.id"
@@ -214,10 +171,7 @@ const goToPage = (url: string | null) => {
                 </div>
 
                 <!-- PAGINATION -->
-                <div
-                    v-if="props.users.data.length && paginationLinks.length > 3"
-                    class="flex flex-wrap justify-center gap-2"
-                >
+                <div v-if="props.users.data.length && paginationLinks.length > 3" class="flex flex-wrap justify-center gap-2">
                     <button
                         v-for="(link, i) in paginationLinks"
                         :key="i"

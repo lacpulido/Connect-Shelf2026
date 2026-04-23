@@ -94,14 +94,12 @@ class ScheduleActionController extends Controller
         return back()->with('success', 'Reschedule request submitted successfully.');
     }
 
-    /**
-     * Find a schedule and abort if the faculty member is not the adviser or a panelist.
-     */
     private function findAuthorizedSchedule(int $scheduleId): Schedule
     {
         $schedule = Schedule::with([
             'project.adviser',
             'project.student',
+            'project.user',
             'project.researchers',
             'project.panelists',
         ])->findOrFail($scheduleId);
@@ -120,14 +118,11 @@ class ScheduleActionController extends Controller
         return $schedule;
     }
 
-    /**
-     * Build and send notifications to all relevant recipients except the acting user.
-     */
     private function sendNotifications(Schedule $schedule, string $title, string $message, string $type): void
     {
         $project = $schedule->project;
 
-        if (!$project) {
+        if (! $project) {
             return;
         }
 
@@ -146,10 +141,6 @@ class ScheduleActionController extends Controller
         }
     }
 
-    /**
-     * Collect all unique recipient IDs for a project notification,
-     * excluding the currently authenticated user to avoid self-notification.
-     */
     private function buildRecipientIds(Project $project): Collection
     {
         $currentUserId = Auth::id();
@@ -163,14 +154,11 @@ class ScheduleActionController extends Controller
             ->push($project->user_id)
             ->merge($project->researchers->pluck('id'))
             ->merge($project->panelists->pluck('id'))
-            ->filter(fn ($id) => !is_null($id) && (int) $id !== (int) $currentUserId)
+            ->filter(fn ($id) => ! is_null($id) && (int) $id !== (int) $currentUserId)
             ->unique()
             ->values();
     }
 
-    /**
-     * Format date, time, and venue into a readable string.
-     */
     private function formatScheduleText(?string $date, ?string $time, ?string $venue): string
     {
         $formattedDate = $date ? Carbon::parse($date)->format('F d, Y') : 'TBA';
@@ -178,38 +166,35 @@ class ScheduleActionController extends Controller
         return "{$formattedDate} | " . ($time ?? 'TBA') . " | " . ($venue ?? 'TBA');
     }
 
-    /**
-     * Get the display name of the authenticated faculty member.
-     */
     private function facultyName(): string
     {
         $user = Auth::user();
 
-        if (!$user) {
+        if (! $user) {
             return 'A faculty member';
         }
 
-        if (!empty($user->name) && trim($user->name) !== '') {
+        if (! empty($user->name) && trim($user->name) !== '') {
             return trim($user->name);
         }
 
         $firstName = trim((string) ($user->first_name ?? ''));
-        $lastName  = trim((string) ($user->last_name ?? ''));
-        $fullName  = trim($firstName . ' ' . $lastName);
+        $lastName = trim((string) ($user->last_name ?? ''));
+        $fullName = trim($firstName . ' ' . $lastName);
 
         if ($fullName !== '') {
             return $fullName;
         }
 
-        $fNameAlt    = trim((string) ($user->fname ?? ''));
-        $lNameAlt    = trim((string) ($user->lname ?? ''));
+        $fNameAlt = trim((string) ($user->fname ?? ''));
+        $lNameAlt = trim((string) ($user->lname ?? ''));
         $fullNameAlt = trim($fNameAlt . ' ' . $lNameAlt);
 
         if ($fullNameAlt !== '') {
             return $fullNameAlt;
         }
 
-        if (!empty($user->email) && trim($user->email) !== '') {
+        if (! empty($user->email) && trim($user->email) !== '') {
             return trim($user->email);
         }
 

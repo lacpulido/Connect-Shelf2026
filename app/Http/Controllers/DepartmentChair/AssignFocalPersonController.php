@@ -36,6 +36,7 @@ class AssignFocalPersonController extends Controller
             'hasExistingFocal' => $hasExistingFocal,
         ]);
     }
+
     public function toggleFocal(User $user): RedirectResponse
     {
         $chair = $this->authorizedChair();
@@ -64,6 +65,7 @@ class AssignFocalPersonController extends Controller
 
         return $chair;
     }
+
     private function validateTargetUser(User $user, User $chair): void
     {
         abort_if((int) $user->id === (int) $chair->id, 403, 'You cannot assign yourself.');
@@ -84,10 +86,12 @@ class AssignFocalPersonController extends Controller
 
         abort_if($hasRestrictedRole, 403, 'This user cannot be assigned as focal person.');
     }
+
     private function revokeFocalRole(User $user): void
     {
         $user->roles()->detach($this->roles['focal']);
     }
+
     private function assignFocalRole(User $user, User $chair): void
     {
         $this->clearExistingFocalPersons($chair);
@@ -96,12 +100,15 @@ class AssignFocalPersonController extends Controller
 
         Notification::create([
             'user_id' => $user->id,
-            'title'   => 'Focal Person Assigned',
+            'title' => 'Focal Person Assigned',
             'message' => 'You have been assigned as the Focal Person of your department.',
-            'status'  => 'UNREAD',
-        
+            'status' => 'UNREAD',
+            'type' => 'focal_assignment',
+            'reference_id' => $user->id,
+            'reference_type' => 'focal_person',
         ]);
     }
+
     private function clearExistingFocalPersons(User $chair): void
     {
         User::query()
@@ -128,6 +135,7 @@ class AssignFocalPersonController extends Controller
             ->paginate(15)
             ->withQueryString();
     }
+
     private function departmentHasFocalPerson(User $chair): bool
     {
         return User::query()
@@ -136,6 +144,7 @@ class AssignFocalPersonController extends Controller
             ->whereHas('roles', fn($q) => $q->where('roles.id', $this->roles['focal']))
             ->exists();
     }
+
     private function resolveRoleIds(): array
     {
         $roles = Role::query()
@@ -143,9 +152,9 @@ class AssignFocalPersonController extends Controller
             ->pluck('id', 'name');
 
         return [
-            'focal' => $roles['Focal Person']       ?? null,
+            'focal' => $roles['Focal Person'] ?? null,
             'chair' => $roles['DepartmentChairPerson'] ?? null,
-            'admin' => $roles['Administrator']       ?? null,
+            'admin' => $roles['Administrator'] ?? null,
         ];
     }
 }

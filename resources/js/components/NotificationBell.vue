@@ -9,6 +9,13 @@ interface NotificationItem {
     message: string
     created_at: string
     status: string
+    type?: string
+    reference_id?: number | string | null
+    reference_type?: string | null
+    modal_title?: string
+    modal_message?: string
+    action_label?: string | null
+    action_url?: string | null
 }
 
 declare global {
@@ -28,6 +35,9 @@ const shouldRender = ref(true)
 const toastedIds = ref<Set<number | string>>(new Set())
 const isFirstLoad = ref(true)
 
+const showNotificationModal = ref(false)
+const selectedNotification = ref<NotificationItem | null>(null)
+
 watch(
     () => page.props.notifications,
     (newNotifications) => {
@@ -37,6 +47,13 @@ watch(
             message: n.message || 'New notification',
             created_at: n.created_at || '',
             status: n.status || 'UNREAD',
+            type: n.type || '',
+            reference_id: n.reference_id ?? null,
+            reference_type: n.reference_type ?? null,
+            modal_title: n.modal_title || n.title || 'Notification',
+            modal_message: n.modal_message || n.message || 'New notification',
+            action_label: n.action_label || null,
+            action_url: n.action_url || null,
         }))
 
         notifications.value = mappedNotifications
@@ -121,7 +138,27 @@ const openNotification = (notif: NotificationItem) => {
         markAsRead(notif.id)
     }
 
+    selectedNotification.value = notif
+    showNotificationModal.value = true
     open.value = false
+}
+
+const closeModal = () => {
+    showNotificationModal.value = false
+    selectedNotification.value = null
+}
+
+const goToNotificationPage = () => {
+    if (!selectedNotification.value?.action_url) return
+
+    const url = selectedNotification.value.action_url
+
+    closeModal()
+
+    router.get(url, {}, {
+        preserveScroll: false,
+        preserveState: false,
+    })
 }
 
 const showToast = (title: string, message: string) => {
@@ -132,7 +169,7 @@ const showToast = (title: string, message: string) => {
         container = document.createElement('div')
         container.id = containerId
         container.className =
-            'fixed top-5 right-5 z-[9999] flex w-full max-w-sm flex-col gap-3 px-3 sm:px-0'
+            'fixed top-4 right-4 z-[9999] flex w-full max-w-[calc(100vw-1rem)] sm:max-w-sm flex-col gap-3 px-2 sm:px-0'
         document.body.appendChild(container)
     }
 
@@ -143,8 +180,8 @@ const showToast = (title: string, message: string) => {
     toast.innerHTML = `
         <div class="p-4">
             <div class="flex items-start gap-3">
-                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#edf5ec]">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-[#0C4B05]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#edf5ec]">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4.5 w-4.5 text-[#0C4B05]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V4a2 2 0 10-4 0v1.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0m6 0H9"/>
                     </svg>
                 </div>
@@ -253,13 +290,13 @@ usePoll(5000, {
         <button
             type="button"
             @click.stop="toggleBell"
-            class="relative flex h-11 w-11 items-center justify-center rounded-full border border-[#d9e7d6] bg-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#f6faf5] hover:shadow-md"
+            class="relative flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-full border border-[#d9e7d6] bg-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#f6faf5] hover:shadow-md"
         >
             <Bell class="h-5 w-5 text-[#0C4B05]" stroke-width="2" />
 
             <span
                 v-if="unreadCount > 0"
-                class="absolute -right-1 -top-1 flex min-h-[20px] min-w-[20px] items-center justify-center rounded-full border-2 border-white bg-[#0C4B05] px-1.5 text-[10px] font-bold leading-none text-white shadow"
+                class="absolute -right-1 -top-1 flex min-h-[18px] min-w-[18px] sm:min-h-[20px] sm:min-w-[20px] items-center justify-center rounded-full border-2 border-white bg-[#0C4B05] px-1 text-[10px] font-bold leading-none text-white shadow"
             >
                 {{ unreadCount > 9 ? '9+' : unreadCount }}
             </span>
@@ -275,18 +312,18 @@ usePoll(5000, {
         >
             <div
                 v-if="open"
-                class="absolute right-0 z-50 mt-3 w-[380px] overflow-hidden rounded-2xl border border-[#d9e7d6] bg-white shadow-2xl ring-1 ring-black/5"
+                class="absolute right-0 z-50 mt-3 w-[300px] max-w-[calc(100vw-1rem)] sm:w-[320px] md:w-[340px] overflow-hidden rounded-2xl border border-[#d9e7d6] bg-white shadow-2xl ring-1 ring-black/5"
             >
-                <div class="border-b border-[#e8f0e6] bg-[#f7fbf6] px-5 py-4">
-                    <div class="flex items-center justify-between gap-3">
-                        <div class="flex items-center gap-3">
-                            <div class="flex h-10 w-10 items-center justify-center rounded-full bg-[#edf5ec]">
-                                <BellRing class="h-5 w-5 text-[#0C4B05]" />
+                <div class="border-b border-[#e8f0e6] bg-[#f7fbf6] px-4 py-3 sm:px-4 sm:py-3.5">
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="flex min-w-0 items-center gap-2.5">
+                            <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#edf5ec]">
+                                <BellRing class="h-4.5 w-4.5 text-[#0C4B05]" />
                             </div>
 
-                            <div>
-                                <h3 class="text-sm font-semibold text-[#0C4B05]">Notifications</h3>
-                                <p class="text-xs text-gray-500">
+                            <div class="min-w-0">
+                                <h3 class="truncate text-sm font-semibold text-[#0C4B05]">Notifications</h3>
+                                <p class="text-[11px] text-gray-500">
                                     {{ unreadCount }} unread notification{{ unreadCount === 1 ? '' : 's' }}
                                 </p>
                             </div>
@@ -296,7 +333,7 @@ usePoll(5000, {
                             v-if="unreadCount > 0"
                             type="button"
                             @click="markAllAsRead"
-                            class="inline-flex items-center gap-1 rounded-full bg-[#edf5ec] px-3 py-1.5 text-xs font-semibold text-[#0C4B05] transition hover:bg-[#e2efdf]"
+                            class="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#edf5ec] px-2.5 py-1.5 text-[11px] font-semibold text-[#0C4B05] transition hover:bg-[#e2efdf]"
                         >
                             <CheckCheck class="h-3.5 w-3.5" />
                             Mark all
@@ -304,44 +341,44 @@ usePoll(5000, {
                     </div>
                 </div>
 
-                <div v-if="notifications.length === 0" class="px-6 py-10">
+                <div v-if="notifications.length === 0" class="px-5 py-8">
                     <div class="flex flex-col items-center justify-center text-center">
-                        <div class="flex h-14 w-14 items-center justify-center rounded-full bg-[#edf5ec]">
-                            <Bell class="h-6 w-6 text-[#0C4B05]" />
+                        <div class="flex h-12 w-12 items-center justify-center rounded-full bg-[#edf5ec]">
+                            <Bell class="h-5 w-5 text-[#0C4B05]" />
                         </div>
-                        <h4 class="mt-4 text-sm font-semibold text-[#0C4B05]">No notifications yet</h4>
-                        <p class="mt-1 max-w-[240px] text-xs leading-5 text-gray-500">
+                        <h4 class="mt-3 text-sm font-semibold text-[#0C4B05]">No notifications yet</h4>
+                        <p class="mt-1 max-w-[220px] text-xs leading-5 text-gray-500">
                             New alerts and updates will appear here once available.
                         </p>
                     </div>
                 </div>
 
-                <div v-else class="max-h-[420px] overflow-y-auto bg-[#fbfdfb] p-2">
+                <div v-else class="max-h-[320px] sm:max-h-[360px] overflow-y-auto bg-[#fbfdfb] p-2">
                     <div
                         v-for="n in recentNotifications"
                         :key="n.id"
                         @click="openNotification(n)"
-                        class="mb-2 cursor-pointer rounded-xl border p-4 transition duration-200 last:mb-0 hover:-translate-y-0.5 hover:shadow-sm"
+                        class="mb-2 cursor-pointer rounded-xl border p-3 transition duration-200 last:mb-0 hover:-translate-y-0.5 hover:shadow-sm"
                         :class="
                             n.status === 'UNREAD'
                                 ? 'border-[#d9e7d6] bg-[#f2f8f1] hover:bg-[#edf5ec]'
                                 : 'border-[#ebf1ea] bg-white hover:bg-[#f8fbf7]'
                         "
                     >
-                        <div class="flex items-start gap-3">
+                        <div class="flex items-start gap-2.5">
                             <div
-                                class="mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full"
+                                class="mt-1 h-2.5 w-2.5 shrink-0 rounded-full"
                                 :class="n.status === 'UNREAD' ? 'bg-[#0C4B05]' : 'bg-gray-300'"
                             ></div>
 
                             <div class="min-w-0 flex-1">
-                                <div class="flex items-start justify-between gap-3">
-                                    <p class="truncate text-sm font-semibold text-[#0C4B05]">
+                                <div class="flex items-start justify-between gap-2">
+                                    <p class="truncate pr-1 text-sm font-semibold text-[#0C4B05]">
                                         {{ n.title }}
                                     </p>
 
                                     <span
-                                        class="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide"
+                                        class="shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-wide"
                                         :class="
                                             n.status === 'UNREAD'
                                                 ? 'bg-[#e6f1e4] text-[#0C4B05]'
@@ -352,15 +389,15 @@ usePoll(5000, {
                                     </span>
                                 </div>
 
-                                <p class="mt-1 line-clamp-2 text-sm leading-5 text-gray-600">
+                                <p class="mt-1 line-clamp-2 text-xs sm:text-sm leading-5 text-gray-600">
                                     {{ n.message }}
                                 </p>
 
-                                <div class="mt-3 flex items-center justify-between gap-3">
-                                    <p class="text-xs font-medium text-[#0C4B05]">
+                                <div class="mt-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                                    <p class="text-[11px] font-medium text-[#0C4B05]">
                                         {{ formatRelativeTime(n.created_at) }}
                                     </p>
-                                    <p class="text-[11px] text-gray-400">
+                                    <p class="text-[10px] sm:text-[11px] text-gray-400">
                                         {{ formatTime(n.created_at) }}
                                     </p>
                                 </div>
@@ -370,5 +407,42 @@ usePoll(5000, {
                 </div>
             </div>
         </transition>
+
+        <div
+            v-if="showNotificationModal && selectedNotification"
+            class="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 px-4"
+        >
+            <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+                <div class="mb-4">
+                    <h3 class="text-lg font-semibold text-[#0C4B05]">
+                        {{ selectedNotification.modal_title || selectedNotification.title }}
+                    </h3>
+                    <p class="mt-2 text-sm leading-6 text-gray-600">
+                        {{ selectedNotification.modal_message || selectedNotification.message }}
+                    </p>
+                </div>
+
+                <div class="flex justify-end gap-3">
+                    <button
+                        type="button"
+                        @click="closeModal"
+                        class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                    >
+                        Close
+                    </button>
+
+                    <button
+                        type="button"
+                        @click="
+                            closeModal();
+                            router.get(route('focalperson.projects'));
+                        "
+                        class="rounded-lg bg-[#0C4B05] px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
+                    >
+                        Go to Projects
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 </template>

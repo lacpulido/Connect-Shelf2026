@@ -14,13 +14,19 @@ class ResearchArchiveController extends Controller
     {
         $user = Auth::user();
 
-        $manuscripts = ProjectManuscript::with([
-                'project.adviser',
-                'project.researchers',
-                'project.department',
+        $manuscripts = ProjectManuscript::query()
+            ->with([
+                'project' => function ($query) {
+                    $query->withTrashed()->with([
+                        'adviser',
+                        'researchers',
+                        'department',
+                    ]);
+                },
             ])
             ->whereHas('project', function ($query) use ($user) {
-                $query->where('department_id', $user->department_id);
+                $query->withTrashed()
+                    ->where('department_id', $user->department_id);
             })
             ->latest()
             ->get()
@@ -45,7 +51,7 @@ class ResearchArchiveController extends Controller
             'original_filename' => $manuscript->original_filename ?? $manuscript->filename ?? '',
             'status'            => $manuscript->status ?? '',
             'abstract'          => $manuscript->abstract ?? '',
-            'project_title'     => $project->title ?? null,
+            'project_title'     => $project?->title ?? null,
             'adviser'           => $adviser ? $this->getFullName($adviser) : null,
             'researchers'       => $researchers
                 ->map(fn ($researcher) => $this->getFullName($researcher))
