@@ -61,7 +61,7 @@ class FacultyDashboardController extends Controller
                 'id' => (string) $document->id,
                 'title' => $document->title,
                 'type' => $document->status,
-                'description' => $this->userName($document->project?->student, 'Student') . ' updated ' . $document->title,
+                'description' => $this->userName($document->project?->student, 'Student') . ' submitted ' . $document->title,
                 'created_at' => optional($document->updated_at)->toDateTimeString(),
                 'project_title' => $document->project?->title,
             ])

@@ -5,9 +5,10 @@ import { ChevronDown } from 'lucide-vue-next';
 import { computed, ref, watchEffect } from 'vue';
 
 import { Breadcrumb, BreadcrumbList, BreadcrumbItem as CrumbItem } from '@/components/ui/breadcrumb';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Separator } from '@/components/ui/separator';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
-
+import { FileText } from 'lucide-vue-next';
 /* ================= TYPES ================= */
 type Form = {
     id: number;
@@ -69,9 +70,8 @@ const downloadFile = (id: number) => {
     window.open(route('student.forms.download', { form: id }), '_blank');
 };
 
-
 usePoll(2000, {
-    only: ['forms', 'isEligible'], 
+    only: ['forms', 'isEligible'],
 });
 </script>
 
@@ -95,24 +95,24 @@ usePoll(2000, {
             </header>
 
             <div class="space-y-6 p-6">
-
                 <!-- ✅ HEADER BOX (NEW) -->
                 <div class="rounded-2xl border border-gray-200 bg-white px-6 py-6 shadow-sm">
-                    <h1 class="text-2xl font-bold text-gray-900">
-                        Forms & Templates
-                    </h1>
-                    <p class="mt-1 text-sm text-gray-500">
-                        Download available forms and templates for your project.
-                    </p>
+                    <h1 class="text-2xl font-bold text-gray-900">Forms & Templates</h1>
+                    <p class="mt-1 text-sm text-gray-500">Download available forms and templates for your project.</p>
                 </div>
 
-                <!-- EMPTY STATE -->
                 <div v-if="!isEligible || forms.length === 0" class="flex min-h-[60vh] items-center justify-center">
-                    <div class="w-full max-w-md rounded-2xl border border-gray-200 bg-white px-8 py-12 text-center shadow-sm">
-                        <p class="text-sm text-gray-500">
-                            No Available Forms and Templates.
-                        </p>
-                    </div>
+                    <Empty class="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-sm">
+                        <EmptyHeader>
+                            <EmptyMedia variant="icon">
+                                <FileText />
+                            </EmptyMedia>
+                        </EmptyHeader>
+
+                        <EmptyTitle>No Forms Available</EmptyTitle>
+
+                        <EmptyDescription> There are currently no forms and templates available for you. </EmptyDescription>
+                    </Empty>
                 </div>
 
                 <!-- SECTIONS -->
@@ -122,19 +122,13 @@ usePoll(2000, {
                         :key="sectionName"
                         class="rounded-[20px] border border-gray-200 bg-white px-5 py-4 shadow-sm"
                     >
-                        <div
-                            class="flex cursor-pointer items-center justify-between"
-                            @click="toggleSection(sectionName)"
-                        >
+                        <div class="flex cursor-pointer items-center justify-between" @click="toggleSection(sectionName)">
                             <div class="flex items-center gap-2">
                                 <h3 class="font-semibold text-gray-900">
                                     {{ sectionName }}
                                 </h3>
 
-                                <ChevronDown
-                                    class="h-5 w-5 transition-transform"
-                                    :class="{ 'rotate-180': openSections[sectionName] }"
-                                />
+                                <ChevronDown class="h-5 w-5 transition-transform" :class="{ 'rotate-180': openSections[sectionName] }" />
                             </div>
                         </div>
 
@@ -153,17 +147,13 @@ usePoll(2000, {
                                     </p>
                                 </div>
 
-                                <button
-                                    @click="downloadFile(form.id)"
-                                    class="rounded-lg bg-[#0C4B05] px-4 py-2 text-sm text-white hover:opacity-90"
-                                >
+                                <button @click="downloadFile(form.id)" class="rounded-lg bg-[#0C4B05] px-4 py-2 text-sm text-white hover:opacity-90">
                                     Download
                                 </button>
                             </div>
                         </div>
                     </div>
                 </div>
-
             </div>
         </SidebarInset>
     </SidebarProvider>

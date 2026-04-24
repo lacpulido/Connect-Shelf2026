@@ -5,19 +5,7 @@ import NavUser from '@/components/NavUser.vue';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader } from '@/components/ui/sidebar';
 import type { NavItem as BaseNavItem, PageProps } from '@/types';
 import { Link, usePage, useRemember } from '@inertiajs/vue3';
-import {
-    Archive,
-    Calendar1,
-    ChevronDown,
-    FileText,
-    FolderClosed,
-    LayoutGrid,
-    LifeBuoy,
-    List,
-    Search,
-    Upload,
-    Users,
-} from 'lucide-vue-next';
+import { Archive, Calendar1, ChevronDown, FileText, FolderClosed, LayoutGrid, List, Search, Upload, Users } from 'lucide-vue-next';
 import { computed } from 'vue';
 
 type ExtendedUser = {
@@ -75,6 +63,7 @@ const mainNavItems = computed<SidebarNavItem[]>(() => {
                 href: route('faculty.schedules'),
                 icon: Calendar1,
             },
+          
             {
                 title: 'Browse Papers',
                 href: route('resources.thesis'),
@@ -150,10 +139,8 @@ const othersNavItems = computed<SidebarNavItem[] | null>(() => {
     return items.length ? items : null;
 });
 
-
-
 const toggleOthers = (): void => {
-   rememberedState.othersOpen = !rememberedState.othersOpen;
+    rememberedState.othersOpen = !rememberedState.othersOpen;
 };
 
 const normalizeUrl = (url: string): string => {
@@ -174,12 +161,7 @@ const isActive = (item: SidebarNavItem): boolean => {
 </script>
 
 <template>
-    <Sidebar
-        collapsible="icon"
-        variant="inset"
-        :default-open="rememberedState.sidebarOpen"
-        @update:open="rememberedState.sidebarOpen = $event"
-    >
+    <Sidebar collapsible="icon" variant="inset" :default-open="rememberedState.sidebarOpen" @update:open="rememberedState.sidebarOpen = $event">
         <SidebarHeader class="flex h-28 items-center justify-center">
             <Link :href="route('home')" class="flex items-center justify-center">
                 <AppLogo class="h-20 w-auto object-contain transition-transform duration-200 hover:scale-105" />
@@ -200,16 +182,9 @@ const isActive = (item: SidebarNavItem): boolean => {
                         'hover:bg-gray-100 group-data-[state=collapsed]:hover:bg-transparent': !isActive(item),
                     }"
                 >
-                    <div
-                        v-if="isActive(item)"
-                        class="absolute left-0 hidden h-6 w-1 rounded-r bg-gray-400 group-data-[state=collapsed]:block"
-                    />
+                    <div v-if="isActive(item)" class="absolute left-0 hidden h-6 w-1 rounded-r bg-gray-400 group-data-[state=collapsed]:block" />
 
-                    <component
-                        :is="item.icon"
-                        class="h-5 w-5 shrink-0"
-                        :class="isActive(item) ? 'text-gray-900' : 'text-gray-600'"
-                    />
+                    <component :is="item.icon" class="h-5 w-5 shrink-0" :class="isActive(item) ? 'text-gray-900' : 'text-gray-600'" />
 
                     <span class="ml-3 whitespace-nowrap text-sm font-medium group-data-[state=collapsed]:hidden">
                         {{ item.title }}
@@ -223,9 +198,7 @@ const isActive = (item: SidebarNavItem): boolean => {
                     @click="toggleOthers"
                     class="group relative flex h-12 w-full items-center rounded-xl px-4 transition-all duration-200 hover:bg-gray-100 group-data-[state=collapsed]:justify-center group-data-[state=collapsed]:px-0 group-data-[state=collapsed]:hover:bg-transparent"
                 >
-                    <span class="ml-3 whitespace-nowrap text-sm font-semibold text-gray-700 group-data-[state=collapsed]:hidden">
-                        Others
-                    </span>
+                    <span class="ml-3 whitespace-nowrap text-sm font-semibold text-gray-700 group-data-[state=collapsed]:hidden"> Others </span>
 
                     <ChevronDown
                         class="ml-auto h-4 w-4 transition-transform group-data-[state=collapsed]:ml-0"
@@ -246,11 +219,7 @@ const isActive = (item: SidebarNavItem): boolean => {
                             'hover:bg-gray-100 group-data-[state=collapsed]:hover:bg-transparent': !isActive(item),
                         }"
                     >
-                        <component
-                            :is="item.icon"
-                            class="h-5 w-5 shrink-0"
-                            :class="isActive(item) ? 'text-gray-900' : 'text-gray-600'"
-                        />
+                        <component :is="item.icon" class="h-5 w-5 shrink-0" :class="isActive(item) ? 'text-gray-900' : 'text-gray-600'" />
 
                         <span class="ml-3 whitespace-nowrap text-sm font-medium group-data-[state=collapsed]:hidden">
                             {{ item.title }}

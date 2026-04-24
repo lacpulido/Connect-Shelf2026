@@ -23,6 +23,11 @@ class SubmitNewPaperController extends Controller
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'document' => ['required', 'file', 'mimes:pdf', 'max:10240'],
+        ], [
+            'document.required' => 'Please upload a PDF file.',
+            'document.file' => 'The uploaded document must be a valid file.',
+            'document.mimes' => 'Only PDF files are allowed.',
+            'document.max' => 'File too large. The PDF file must not exceed 10MB.',
         ]);
 
         $user = Auth::user();
@@ -65,19 +70,18 @@ class SubmitNewPaperController extends Controller
 
         $projectTitle = $project->title ?? 'Untitled Project';
 
-        // ✅ CLEAN NOTIFICATION FORMAT
         if ($project->adviser_id) {
             NotificationService::send(
-    userId: $project->adviser_id,
-    title: 'New Paper Submission',
-    message:
-        "New paper submitted for: {$projectTitle}\n\n" .
-        "Title: {$document->title}\n" .
-        "Submitted by: {$submittedBy}",
-    type: 'PAPER_SUBMITTED',
-    referenceId: $document->id,
-    referenceType: 'project_document'
-);
+                userId: $project->adviser_id,
+                title: 'New Paper Submission',
+                message:
+                    "New paper submitted for: {$projectTitle}\n\n" .
+                    "Title: {$document->title}\n" .
+                    "Submitted by: {$submittedBy}",
+                type: 'PAPER_SUBMITTED',
+                referenceId: $document->id,
+                referenceType: 'project_document'
+            );
         }
 
         return redirect()
@@ -89,37 +93,52 @@ class SubmitNewPaperController extends Controller
     {
         $validated = $request->validate([
             'document' => ['required', 'file', 'mimes:pdf', 'max:10240'],
+        ], [
+            'document.required' => 'Please upload a PDF file.',
+            'document.file' => 'The uploaded document must be a valid file.',
+            'document.mimes' => 'Only PDF files are allowed.',
+            'document.max' => 'File too large. The PDF file must not exceed 10MB.',
         ]);
+
         $user = Auth::user();
+
         $oldDocument = ProjectDocument::with('project')->findOrFail($submission);
+
         $root = $oldDocument;
+
         while ($root->parent_id) {
             $root = ProjectDocument::find($root->parent_id);
         }
 
         $rootId = $root->id;
+
         $latestVersion = ProjectDocument::where(function ($query) use ($rootId) {
             $query->where('id', $rootId)
                 ->orWhere('parent_id', $rootId);
         })->max('version');
+
         ProjectDocument::where(function ($query) use ($rootId) {
             $query->where('id', $rootId)
                 ->orWhere('parent_id', $rootId);
         })->update([
             'is_current' => false,
         ]);
+
         $originalName = pathinfo(
             $validated['document']->getClientOriginalName(),
             PATHINFO_FILENAME
         );
+
         $extension = $validated['document']->getClientOriginalExtension();
         $newVersion = $latestVersion + 1;
         $fileName = $originalName . '-v' . $newVersion . '.' . $extension;
+
         $validated['document']->storeAs(
             "project-documents/{$oldDocument->project_id}",
             $fileName,
             'local'
         );
+
         $newDocument = ProjectDocument::create([
             'project_id' => $oldDocument->project_id,
             'title' => $oldDocument->title,
@@ -129,21 +148,26 @@ class SubmitNewPaperController extends Controller
             'is_current' => true,
             'parent_id' => $rootId,
         ]);
+
         $project = $oldDocument->project;
+
         $submittedBy = trim(
             ($user->first_name ?? '') . ' ' .
             ($user->middle_name ?? '') . ' ' .
             ($user->last_name ?? '')
         );
+
         $projectTitle = $project->title ?? 'Untitled Project';
+
         if ($project && $project->adviser_id) {
             NotificationService::send(
                 userId: $project->adviser_id,
                 title: 'Paper Resubmitted',
-                message: "Paper Resubmitted\n\n"
-                    . "Project: {$projectTitle}\n"
-                    . "Title: {$newDocument->title}\n"
-                    . "Submitted by: {$submittedBy}",
+                message:
+                    "Paper Resubmitted\n\n" .
+                    "Project: {$projectTitle}\n" .
+                    "Title: {$newDocument->title}\n" .
+                    "Submitted by: {$submittedBy}",
                 type: 'PAPER_RESUBMITTED',
                 referenceId: $newDocument->id,
                 referenceType: 'project_document'

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import AppSidebar from '@/components/AppSidebar.vue';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList } from '@/components/ui/breadcrumb';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Separator } from '@/components/ui/separator';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { useAlerts } from '@/composables/useAlerts';
@@ -14,8 +15,7 @@ import type { Project } from '@/types/project';
 import type { Submission } from '@/types/submission';
 import { parseSubmissionSlug } from '@/utils/parseSubmissionSlug';
 import { Head, Link, router, usePage, usePoll } from '@inertiajs/vue3';
-import { ChevronDown, ChevronUp, CloudUpload, FileText, LoaderCircle } from 'lucide-vue-next';
-import Swal from 'sweetalert2';
+import { ChevronDown, ChevronUp, CloudUpload, FileText, FolderOpen, LoaderCircle, LockKeyhole } from 'lucide-vue-next';
 import { computed, onMounted, ref } from 'vue';
 
 type PageProps = {
@@ -34,13 +34,13 @@ type SectionItem = {
 };
 
 const page = usePage<PageProps>();
+
 const project = computed(() => page.props.project ?? null);
 const documents = computed<Submission[][]>(() => page.props.documents ?? []);
 
 const latestDocuments = useLatestDocuments(documents);
 const { statusClasses, statusLabel } = useSubmissionStatus();
 const { formatDateTime } = useDateFormatter();
-
 const { groupedSections } = useGroupedSections(latestDocuments, SECTION_DEFINITIONS);
 
 const { toggleSection, isOpen } = useSubmissionAccordion(
@@ -54,21 +54,28 @@ const {
     showErrorAlert,
     showInfoAlert,
     confirmDelete,
+    showLoadingAlert,
+    closeAlert,
 } = useAlerts();
+
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 
 const fileInputs = ref<Record<string | number, HTMLInputElement | null>>({});
 const dragActiveSections = ref<Record<string, boolean>>({});
 const uploadingSections = ref<Record<string, boolean>>({});
+const uploadErrors = ref<Record<string, string>>({});
 
 const hasProject = computed(() => !!project.value);
 
 const isProjectCompleted = computed(() => {
     if (!project.value) return false;
 
-    return String(project.value.status ?? '').toLowerCase() === 'completed' || !!project.value.completed_at;
+    return String(project.value.status ?? '').toLowerCase() === 'completed';
 });
 
 function setDragState(sectionKey: string, value: boolean) {
+    if (isProjectCompleted.value) return;
+
     dragActiveSections.value[sectionKey] = value;
 }
 
@@ -80,7 +87,17 @@ function isUploading(sectionKey: string) {
     return !!uploadingSections.value[sectionKey];
 }
 
+function clearFileTooLargeError(key: string | number) {
+    uploadErrors.value[String(key)] = '';
+}
+
+function setFileTooLargeError(key: string | number) {
+    uploadErrors.value[String(key)] = 'File too large. The PDF file must not exceed 10MB.';
+}
+
 function triggerFileInput(key: string | number) {
+    clearFileTooLargeError(key);
+
     if (!hasProject.value) {
         showErrorAlert('No Project Found', 'Create a project first before submitting files.');
         return;
@@ -94,28 +111,21 @@ function triggerFileInput(key: string | number) {
     fileInputs.value[key]?.click();
 }
 
-function validatePdfFile(file: File | null): boolean {
+function validatePdfFile(file: File | null, errorKey: string | number): boolean {
+    clearFileTooLargeError(errorKey);
+
     if (!file) return false;
 
     const isPdfMime = file.type === 'application/pdf';
     const isPdfExtension = file.name.toLowerCase().endsWith('.pdf');
 
     if (!isPdfMime && !isPdfExtension) {
-        Swal.fire({
-            icon: 'error',
-            title: 'Invalid File',
-            text: 'Only PDF files are allowed.',
-            confirmButtonColor: '#dc2626',
-            confirmButtonText: 'OK',
-            width: 320,
-            padding: '1rem',
-            customClass: {
-                popup: 'rounded-xl',
-                title: 'text-lg font-semibold',
-                htmlContainer: 'text-sm',
-                confirmButton: 'px-4 py-1.5 text-sm rounded-md',
-            },
-        });
+        showErrorAlert('Invalid File', 'Only PDF files are allowed.');
+        return false;
+    }
+
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+        setFileTooLargeError(errorKey);
         return false;
     }
 
@@ -127,6 +137,7 @@ function canRemoveFile(doc: Submission) {
     if (isProjectCompleted.value) return false;
 
     const unreviewedStatuses = ['pending', 'submitted'];
+
     return !!doc.file_url && unreviewedStatuses.includes(String(doc.status ?? '').toLowerCase());
 }
 
@@ -139,6 +150,8 @@ function canResubmit(doc: Submission) {
 }
 
 function uploadNewFile(section: SectionItem, file: File | null) {
+    const errorKey = `new-${section.key}`;
+
     if (!hasProject.value) {
         showErrorAlert('No Project Found', 'Create a project first before submitting files.');
         return;
@@ -149,8 +162,8 @@ function uploadNewFile(section: SectionItem, file: File | null) {
         return;
     }
 
-    if (!validatePdfFile(file)) {
-        const input = fileInputs.value[`new-${section.key}`];
+    if (!validatePdfFile(file, errorKey)) {
+        const input = fileInputs.value[errorKey];
         if (input) input.value = '';
         return;
     }
@@ -160,54 +173,45 @@ function uploadNewFile(section: SectionItem, file: File | null) {
     formData.append('document', file as File);
 
     uploadingSections.value[section.key] = true;
+    showLoadingAlert('Submitting paper...');
 
     router.post(route('student.submit-paper.store'), formData, {
         forceFormData: true,
         preserveScroll: true,
         preserveState: true,
-        onSuccess: () => {
-            Swal.fire({
-                icon: 'success',
-                title: 'Submitted',
-                text: 'Paper submitted successfully.',
-                confirmButtonColor: '#0C4B05',
-                confirmButtonText: 'OK',
-                width: 320,
-                padding: '1rem',
-                iconColor: '#16a34a',
-                customClass: {
-                    popup: 'rounded-xl',
-                    title: 'text-lg font-semibold',
-                    htmlContainer: 'text-sm',
-                    confirmButton: 'px-4 py-1.5 text-sm rounded-md',
-                },
-            });
 
-            const input = fileInputs.value[`new-${section.key}`];
+        onSuccess: () => {
+            clearFileTooLargeError(errorKey);
+
+            const input = fileInputs.value[errorKey];
             if (input) input.value = '';
+
+            closeAlert();
+
+            showSuccessAlert(
+                'Paper Submitted',
+                'Your paper has been submitted successfully.',
+            );
 
             router.reload({ only: ['documents', 'project'] });
         },
-        onError: (errors) => {
-            Swal.fire({
-                icon: 'error',
-                title: 'Submission Failed',
-                text: Object.values(errors)[0] || 'Please check your inputs and try again.',
-                confirmButtonColor: '#dc2626',
-                confirmButtonText: 'OK',
-                width: 320,
-                padding: '1rem',
-                customClass: {
-                    popup: 'rounded-xl',
-                    title: 'text-lg font-semibold',
-                    htmlContainer: 'text-sm',
-                    confirmButton: 'px-4 py-1.5 text-sm rounded-md',
-                },
-            });
 
-            const input = fileInputs.value[`new-${section.key}`];
+        onError: (errors) => {
+            closeAlert();
+
+            if (errors.document && String(errors.document).toLowerCase().includes('10')) {
+                setFileTooLargeError(errorKey);
+            } else {
+                showErrorAlert(
+                    'Submission Failed',
+                    String(Object.values(errors)[0] || 'Please check your inputs and try again.'),
+                );
+            }
+
+            const input = fileInputs.value[errorKey];
             if (input) input.value = '';
         },
+
         onFinish: () => {
             uploadingSections.value[section.key] = false;
             dragActiveSections.value[section.key] = false;
@@ -216,14 +220,25 @@ function uploadNewFile(section: SectionItem, file: File | null) {
 }
 
 function handleNewUploadChange(event: Event, section: SectionItem) {
+    if (isProjectCompleted.value) {
+        showInfoAlert('Upload Disabled', 'Uploads are no longer allowed because this project is already completed.');
+        return;
+    }
+
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0] ?? null;
+
     uploadNewFile(section, file);
 }
 
 function handleDropUpload(event: DragEvent, section: SectionItem) {
     event.preventDefault();
     setDragState(section.key, false);
+
+    if (isProjectCompleted.value) {
+        showInfoAlert('Upload Disabled', 'Uploads are no longer allowed because this project is already completed.');
+        return;
+    }
 
     if (!canUploadNew(section)) return;
 
@@ -243,29 +258,47 @@ function handleResubmit(event: Event, submissionId: number) {
     }
 
     const input = event.target as HTMLInputElement;
-    if (!input.files || !input.files[0]) return;
+    const file = input.files?.[0] ?? null;
 
-    const file = input.files[0];
-
-    if (!validatePdfFile(file)) {
+    if (!validatePdfFile(file, submissionId)) {
         input.value = '';
         return;
     }
 
     const formData = new FormData();
-    formData.append('document', file);
+    formData.append('document', file as File);
+
+    showLoadingAlert('Resubmitting paper...');
 
     router.post(route('student.submissions.resubmit', { submission: submissionId }), formData, {
         forceFormData: true,
         preserveScroll: true,
         preserveState: true,
+
         onSuccess: () => {
-            showSuccessAlert('Resubmission Successful', 'Your document has been resubmitted successfully.');
+            clearFileTooLargeError(submissionId);
             input.value = '';
+
+            closeAlert();
+
+            showSuccessAlert(
+                'Resubmission Successful',
+                'Your document has been resubmitted successfully.',
+            );
+
             router.reload({ only: ['documents', 'project'] });
         },
-        onError: () => {
-            showErrorAlert('Upload Failed', 'Something went wrong while resubmitting the document.');
+
+        onError: (errors) => {
+            closeAlert();
+
+            if (errors.document && String(errors.document).toLowerCase().includes('10')) {
+                setFileTooLargeError(submissionId);
+            } else {
+                showErrorAlert('Upload Failed', 'Something went wrong while resubmitting the document.');
+            }
+
+            input.value = '';
         },
     });
 }
@@ -286,10 +319,12 @@ function handleDelete(submissionId: number) {
             router.delete(route('student.submissions.destroy', { id: submissionId }), {
                 preserveScroll: true,
                 preserveState: true,
+
                 onSuccess: () => {
                     showSuccessAlert('File Removed', 'The uploaded file has been removed successfully.');
                     router.reload({ only: ['documents', 'project'] });
                 },
+
                 onError: () => {
                     showErrorAlert('Delete Failed', 'Something went wrong while removing the file.');
                 },
@@ -334,19 +369,47 @@ usePoll(2000, {
             <div class="space-y-6 p-6">
                 <div class="rounded-2xl border border-gray-200 bg-white px-6 py-5 shadow-sm">
                     <h1 class="text-xl font-semibold text-gray-900">Submissions</h1>
-                    <p class="mt-1 text-sm text-gray-500">Upload and manage your project documents.</p>
-                </div>
-
-                <div
-                    v-if="!hasProject"
-                    class="rounded-2xl border border-green-200 bg-green-50 px-6 py-6 text-center shadow-sm"
-                >
-                    <p class="text-sm text-green-700">
-                        Create a project first before you can upload or manage submissions.
+                    <p class="mt-1 text-sm text-gray-500">
+                        Upload and manage your project documents.
                     </p>
                 </div>
 
-                <div v-if="hasProject" class="space-y-4">
+                <div v-if="!hasProject" class="flex min-h-[60vh] items-center justify-center">
+                    <Empty class="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-sm">
+                        <EmptyHeader>
+                            <EmptyMedia variant="icon">
+                                <FolderOpen />
+                            </EmptyMedia>
+                        </EmptyHeader>
+
+                        <EmptyTitle>No Project Yet</EmptyTitle>
+                        <EmptyDescription>
+                            Create a project first before you can upload or manage submissions.
+                        </EmptyDescription>
+                    </Empty>
+                </div>
+
+                <div v-else class="space-y-4">
+                    <div
+                        v-if="isProjectCompleted"
+                        class="rounded-2xl border border-gray-200 bg-gray-50 px-6 py-5 shadow-sm"
+                    >
+                        <div class="flex items-start gap-3">
+                            <div class="rounded-xl bg-white p-2 shadow-sm">
+                                <LockKeyhole class="h-5 w-5 text-gray-600" />
+                            </div>
+
+                            <div>
+                                <h2 class="text-sm font-semibold text-gray-900">
+                                    Project Completed
+                                </h2>
+                                <p class="mt-1 text-sm text-gray-600">
+                                    This project is already completed. Uploading, resubmission, and file removal are now disabled.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
                     <div
                         v-for="section in groupedSections"
                         :key="section.key"
@@ -368,10 +431,7 @@ usePoll(2000, {
                         </button>
 
                         <div v-if="isOpen(section.key)" class="mt-5">
-                            <div
-                                v-if="canUploadNew(section)"
-                                class="mb-5"
-                            >
+                            <div v-if="canUploadNew(section)" class="mb-5">
                                 <div
                                     role="button"
                                     tabindex="0"
@@ -382,20 +442,20 @@ usePoll(2000, {
                                     @dragleave.prevent="setDragState(section.key, false)"
                                     @drop="handleDropUpload($event, section)"
                                     :class="[
-                                        'group flex min-h-[220px] w-full cursor-pointer flex-col items-center justify-center rounded-[28px] border border-dashed px-6 py-10 text-center transition-all duration-200',
+                                        'group flex min-h-[220px] w-full flex-col items-center justify-center rounded-[28px] border border-dashed px-6 py-10 text-center transition-all duration-200',
                                         isDragging(section.key)
                                             ? 'border-[#0C4B05] bg-green-50 shadow-sm'
                                             : 'border-gray-300 bg-[#fafafa] hover:border-[#0C4B05] hover:bg-green-50/40',
                                         isUploading(section.key) ? 'pointer-events-none opacity-70' : '',
+                                        uploadErrors[`new-${section.key}`] ? 'border-red-300 bg-red-50/40' : '',
                                     ]"
                                 >
-                                    <div
-                                        class="mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-green-50"
-                                    >
+                                    <div class="mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-green-50">
                                         <LoaderCircle
                                             v-if="isUploading(section.key)"
                                             class="h-10 w-10 animate-spin text-[#0C4B05]"
                                         />
+
                                         <CloudUpload
                                             v-else
                                             class="h-10 w-10 text-[#0C4B05]"
@@ -410,6 +470,13 @@ usePoll(2000, {
                                         Supported files: PDF
                                     </p>
                                 </div>
+
+                                <p
+                                    v-if="uploadErrors[`new-${section.key}`]"
+                                    class="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700"
+                                >
+                                    {{ uploadErrors[`new-${section.key}`] }}
+                                </p>
 
                                 <input
                                     type="file"
@@ -427,10 +494,7 @@ usePoll(2000, {
                                 Project is already completed.
                             </div>
 
-                            <div
-                                v-if="section.documents.length > 0"
-                                class="space-y-5"
-                            >
+                            <div v-if="section.documents.length > 0" class="space-y-5">
                                 <div
                                     v-for="(doc, index) in section.documents"
                                     :key="doc.id"
@@ -531,6 +595,7 @@ usePoll(2000, {
                                                 :href="
                                                     (() => {
                                                         const { folder, document } = parseSubmissionSlug(doc.slug);
+
                                                         return route('student.submissions.show', {
                                                             project: project.slug,
                                                             folder,
@@ -552,6 +617,20 @@ usePoll(2000, {
                                                 @change="(e) => handleResubmit(e, doc.id)"
                                             />
                                         </div>
+
+                                        <p
+                                            v-if="uploadErrors[doc.id]"
+                                            class="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700"
+                                        >
+                                            {{ uploadErrors[doc.id] }}
+                                        </p>
+
+                                        <p
+                                            v-if="isProjectCompleted"
+                                            class="mt-3 rounded-lg border border-gray-200 bg-gray-50 px-4 py-2 text-sm text-gray-500"
+                                        >
+                                            Project is already completed. File actions are disabled.
+                                        </p>
                                     </div>
                                 </div>
                             </div>
@@ -560,7 +639,16 @@ usePoll(2000, {
                                 v-else
                                 class="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center"
                             >
-                                <p class="text-sm text-gray-500">No file submitted for {{ section.label }}</p>
+                                <p class="text-sm text-gray-500">
+                                    No file submitted for {{ section.label }}
+                                </p>
+
+                                <p
+                                    v-if="isProjectCompleted"
+                                    class="mt-1 text-xs text-gray-400"
+                                >
+                                    Submissions are closed.
+                                </p>
                             </div>
                         </div>
                     </div>

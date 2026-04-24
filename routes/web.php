@@ -280,6 +280,7 @@ Route::middleware(['auth', 'verified', 'access:faculty'])
 
         Route::post('/projects/{project}/accept-adviser', [ProjectController::class, 'acceptAdviser'])
             ->name('projects.accept-adviser');
+        
     });
 //Department Chair Routes
 Route::middleware(['auth', 'verified', 'access:Department ChairPerson'])

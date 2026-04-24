@@ -8,7 +8,7 @@ import { useAlerts } from '@/composables/useAlerts';
 import { Project } from '@/types/project';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
 import { Head, useForm, usePage } from '@inertiajs/vue3';
-import { CheckCircle2, Clock3, FileText, LoaderCircle, UploadCloud } from 'lucide-vue-next';
+import { CheckCircle2, Clock3, FileText, LoaderCircle, LockKeyhole, UploadCloud } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 
 interface PageProps extends InertiaPageProps {
@@ -23,12 +23,21 @@ const props = defineProps<{
     manuscriptSubmitted: boolean;
     manuscriptStatus: string | null;
     manuscriptFileName: string | null;
+    canSubmitFinalManuscript: boolean;
+    approvedManuscriptDocument: {
+        id: number;
+        title: string;
+        filename: string;
+        status: string;
+    } | null;
 }>();
 
 const page = usePage<PageProps>();
 const flashSuccess = computed(() => page.props.flash?.success || '');
 
 const { showSuccessAlert, showErrorAlert } = useAlerts();
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 const form = useForm({
     title: props.project?.title ?? '',
@@ -61,10 +70,26 @@ watch(
 function handleFileChange(event: Event) {
     const input = event.target as HTMLInputElement;
 
-    if (input.files?.length) {
-        form.manuscript = input.files[0];
-        fileError.value = '';
+    fileError.value = '';
+    form.manuscript = null;
+
+    if (!input.files?.length) return;
+
+    const file = input.files[0];
+
+    if (file.size > MAX_FILE_SIZE) {
+        fileError.value = 'File is too large. Maximum size is 10MB.';
+        input.value = '';
+        return;
     }
+
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+        fileError.value = 'Only PDF files are allowed.';
+        input.value = '';
+        return;
+    }
+
+    form.manuscript = file;
 }
 
 function cleanFileName(name: string | null): string {
@@ -76,6 +101,11 @@ function submit() {
     abstractError.value = '';
     fileError.value = '';
 
+    if (!props.canSubmitFinalManuscript) {
+        showErrorAlert('Not Allowed', 'Your Manuscript document must be approved by your adviser first before submitting the final manuscript.');
+        return;
+    }
+
     let hasError = false;
 
     if (!form.abstract.trim()) {
@@ -85,6 +115,16 @@ function submit() {
 
     if (!form.manuscript) {
         fileError.value = 'Please upload a manuscript file.';
+        hasError = true;
+    }
+
+    if (form.manuscript && form.manuscript.size > MAX_FILE_SIZE) {
+        fileError.value = 'File is too large. Maximum size is 10MB.';
+        hasError = true;
+    }
+
+    if (form.manuscript && form.manuscript.type !== 'application/pdf' && !form.manuscript.name.toLowerCase().endsWith('.pdf')) {
+        fileError.value = 'Only PDF files are allowed.';
         hasError = true;
     }
 
@@ -102,9 +142,19 @@ function submit() {
             showSuccessAlert('Submitted Successfully', 'Final manuscript submitted successfully.');
         },
         onError: (errors) => {
-            const firstError = errors.error || errors.manuscript || errors.abstract || errors.title || 'Something went wrong.';
-
             isSaving.value = false;
+
+            if (errors.manuscript) {
+                fileError.value = String(errors.manuscript);
+                return;
+            }
+
+            if (errors.abstract) {
+                abstractError.value = String(errors.abstract);
+                return;
+            }
+
+            const firstError = errors.error || errors.title || 'Something went wrong.';
             showErrorAlert('Submission Failed', String(firstError));
         },
         onFinish: () => {
@@ -135,9 +185,7 @@ function submit() {
             <div class="space-y-6 p-6">
                 <div class="rounded-2xl border border-gray-200 bg-white px-6 py-6 shadow-sm">
                     <h1 class="text-2xl font-bold text-gray-900">Final Manuscript</h1>
-                    <p class="mt-1 text-sm text-gray-500">
-                        Submit and manage your final manuscript for project review.
-                    </p>
+                    <p class="mt-1 text-sm text-gray-500">Submit and manage your final manuscript for project review.</p>
                 </div>
 
                 <div v-if="!project" class="flex min-h-[60vh] items-center justify-center">
@@ -164,15 +212,7 @@ function submit() {
                         </EmptyHeader>
 
                         <EmptyTitle>Approved</EmptyTitle>
-                        <EmptyDescription>
-                            Your final manuscript has been successfully approved.
-                        </EmptyDescription>
-
-                        <EmptyContent>
-                            <p v-if="manuscriptFileName" class="text-sm text-gray-700">
-                                File: {{ cleanFileName(manuscriptFileName) }}
-                            </p>
-                        </EmptyContent>
+                        <EmptyDescription> Your final manuscript has been successfully approved. </EmptyDescription>
                     </Empty>
                 </div>
 
@@ -186,12 +226,19 @@ function submit() {
 
                         <EmptyTitle>Pending Review</EmptyTitle>
                         <EmptyDescription>Your manuscript is under review.</EmptyDescription>
+                    </Empty>
+                </div>
 
-                        <EmptyContent>
-                            <p v-if="manuscriptFileName" class="text-sm text-gray-700">
-                                Uploaded File: {{ cleanFileName(manuscriptFileName) }}
-                            </p>
-                        </EmptyContent>
+                <div v-else-if="!canSubmitFinalManuscript" class="flex min-h-[60vh] items-center justify-center">
+                    <Empty class="w-full max-w-md rounded-2xl border border-amber-200 bg-amber-50 shadow-sm">
+                        <EmptyHeader>
+                            <EmptyMedia variant="icon">
+                                <LockKeyhole />
+                            </EmptyMedia>
+                        </EmptyHeader>
+
+                        <EmptyTitle>Final Manuscript Locked</EmptyTitle>
+                        <EmptyDescription> Your Manuscript document must be approved by your adviser. </EmptyDescription>
                     </Empty>
                 </div>
 
@@ -237,32 +284,26 @@ function submit() {
                                 class="mt-2 w-full rounded-xl border border-gray-300 px-4 py-3 outline-none transition focus:border-[#0C4B05] focus:ring-2 focus:ring-[#0C4B05]/10"
                                 placeholder="Write your abstract..."
                             />
+
                             <p v-if="abstractError" class="mt-2 text-xs text-red-500">
                                 {{ abstractError }}
                             </p>
                         </div>
 
                         <div>
-                            <label class="mb-2 block text-sm font-medium text-gray-700">
-                                Upload Manuscript
-                            </label>
+                            <label class="mb-2 block text-sm font-medium text-gray-700"> Upload Manuscript </label>
 
                             <label
                                 class="flex min-h-[170px] w-full cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-gray-50 px-6 py-8 text-center transition hover:border-[#0C4B05] hover:bg-green-50/40"
+                                :class="fileError ? 'border-red-300 bg-red-50 hover:border-red-400 hover:bg-red-50' : ''"
                             >
-                                <UploadCloud class="mb-3 h-10 w-10 text-[#0C4B05]" />
-                                <span class="text-sm font-medium text-gray-700">
-                                    Click to upload or drag file here
-                                </span>
-                                <span class="mt-1 text-xs text-gray-500">
-                                    Supported files: PDF
-                                </span>
-                                <input
-                                    type="file"
-                                    accept=".pdf,.doc,.docx"
-                                    @change="handleFileChange"
-                                    class="hidden"
-                                />
+                                <UploadCloud class="mb-3 h-10 w-10" :class="fileError ? 'text-red-500' : 'text-[#0C4B05]'" />
+
+                                <span class="text-sm font-medium text-gray-700"> Click to upload or drag file here </span>
+
+                                <span class="mt-1 text-xs text-gray-500"> Supported files: PDF only, maximum 10MB </span>
+
+                                <input type="file" accept="application/pdf,.pdf" @change="handleFileChange" class="hidden" />
                             </label>
 
                             <p v-if="form.manuscript" class="mt-3 text-sm text-gray-600">
@@ -270,12 +311,7 @@ function submit() {
                                 <span class="font-medium">{{ cleanFileName(form.manuscript.name) }}</span>
                             </p>
 
-                            <p v-else-if="manuscriptSubmitted && manuscriptFileName" class="mt-3 text-sm text-gray-700">
-                                Uploaded:
-                                <span class="font-medium">{{ cleanFileName(manuscriptFileName) }}</span>
-                            </p>
-
-                            <p v-if="fileError" class="mt-2 text-xs text-red-500">
+                            <p v-if="fileError" class="mt-2 text-xs font-medium text-red-500">
                                 {{ fileError }}
                             </p>
                         </div>

@@ -5,12 +5,12 @@ namespace App\Http\Controllers\Student;
 use App\Http\Controllers\Controller;
 use App\Models\Notification;
 use App\Models\Project;
+use App\Models\ProjectDocument;
 use App\Models\ProjectManuscript;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
 class SubmitFinalManuscriptController extends Controller
@@ -19,15 +19,7 @@ class SubmitFinalManuscriptController extends Controller
     {
         $userId = Auth::id();
 
-        $project = Project::with('department')
-            ->where(function ($query) use ($userId) {
-                $query->where('user_id', $userId)
-                    ->orWhereHas('researchers', function ($q) use ($userId) {
-                        $q->where('user_id', $userId);
-                    });
-            })
-            ->latest()
-            ->first();
+        $project = $this->getStudentProject($userId);
 
         if (!$project) {
             return Inertia::render('Student/SubmitFinalManuscript', [
@@ -35,12 +27,16 @@ class SubmitFinalManuscriptController extends Controller
                 'manuscriptSubmitted' => false,
                 'manuscriptStatus' => null,
                 'manuscriptFileName' => null,
+                'canSubmitFinalManuscript' => false,
+                'approvedManuscriptDocument' => null,
             ]);
         }
 
         $manuscript = ProjectManuscript::where('project_id', $project->id)
             ->latest()
             ->first();
+
+        $approvedDocument = $this->getApprovedManuscriptDocument($project->id);
 
         return Inertia::render('Student/SubmitFinalManuscript', [
             'project' => [
@@ -54,6 +50,13 @@ class SubmitFinalManuscriptController extends Controller
             'manuscriptSubmitted' => $manuscript ? true : false,
             'manuscriptStatus' => $manuscript->status ?? null,
             'manuscriptFileName' => $manuscript->original_filename ?? $manuscript->filename ?? null,
+            'canSubmitFinalManuscript' => $approvedDocument ? true : false,
+            'approvedManuscriptDocument' => $approvedDocument ? [
+                'id' => $approvedDocument->id,
+                'title' => $approvedDocument->title,
+                'filename' => $approvedDocument->filename,
+                'status' => $approvedDocument->status,
+            ] : null,
         ]);
     }
 
@@ -71,21 +74,23 @@ class SubmitFinalManuscriptController extends Controller
                 'manuscript' => 'required|file|mimes:pdf,doc,docx|max:10240',
             ]);
 
-            $project = Project::with(['department', 'user', 'researchers'])
-                ->where(function ($query) use ($userId) {
-                    $query->where('user_id', $userId)
-                        ->orWhereHas('researchers', function ($q) use ($userId) {
-                            $q->where('user_id', $userId);
-                        });
-                })
-                ->latest()
-                ->first();
+            $project = $this->getStudentProject($userId);
 
             if (!$project) {
                 DB::rollBack();
 
                 return back()->withErrors([
                     'error' => 'You are not assigned to any project.',
+                ]);
+            }
+
+            $approvedDocument = $this->getApprovedManuscriptDocument($project->id);
+
+            if (!$approvedDocument) {
+                DB::rollBack();
+
+                return back()->withErrors([
+                    'error' => 'You can only submit the final manuscript after your Manuscript document is approved by your adviser.',
                 ]);
             }
 
@@ -112,12 +117,15 @@ class SubmitFinalManuscriptController extends Controller
                 'status' => 'pending',
             ]);
 
-            $submitterName = trim($user->first_name . ' ' . $user->last_name);
+            $submitterName = trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? ''));
 
             $departmentChairs = User::query()
                 ->where('department_id', $project->department_id)
                 ->whereHas('roles', function ($query) {
-                    $query->where('name', 'Department Chair');
+                    $query->whereIn('name', [
+                        'Department Chair',
+                        'Department ChairPerson',
+                    ]);
                 })
                 ->get();
 
@@ -143,5 +151,38 @@ class SubmitFinalManuscriptController extends Controller
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    private function getStudentProject(int $userId): ?Project
+    {
+        return Project::with(['department', 'user', 'researchers'])
+            ->where(function ($query) use ($userId) {
+                $query->where('user_id', $userId)
+                    ->orWhereHas('researchers', function ($q) use ($userId) {
+                        $q->where('user_id', $userId);
+                    });
+            })
+            ->latest()
+            ->first();
+    }
+
+    private function getApprovedManuscriptDocument(int $projectId): ?ProjectDocument
+    {
+        return ProjectDocument::query()
+            ->where('project_id', $projectId)
+            ->where('status', 'approved')
+            ->where(function ($query) {
+                $query->where('title', 'like', '%manuscript%')
+                    ->orWhere('slug', 'like', '%manuscript%');
+            })
+            ->when(
+                ProjectDocument::query()
+                    ->where('project_id', $projectId)
+                    ->whereNotNull('is_current')
+                    ->exists(),
+                fn ($query) => $query->where('is_current', true)
+            )
+            ->latest()
+            ->first();
     }
 }
