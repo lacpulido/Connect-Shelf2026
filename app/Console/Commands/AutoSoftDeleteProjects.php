@@ -2,32 +2,48 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
 use App\Models\Project;
-use Carbon\Carbon;
+use Illuminate\Console\Command;
+use Illuminate\Support\Carbon;
 
 class AutoSoftDeleteProjects extends Command
 {
     protected $signature = 'app:auto-soft-delete-projects';
     protected $description = 'Soft delete completed projects automatically';
 
-    public function handle()
+    public function handle(): int
     {
-        // Adjust days if needed (example: 1 day after completion)
-        $projects = Project::where('status', 'Completed')
+        $cutoff = Carbon::now()->subMinute();
+
+        $this->info('Cutoff: ' . $cutoff->toDateTimeString());
+
+        $projects = Project::query()
+            ->where('status', 'Completed')
             ->whereNotNull('completed_at')
-            ->where('completed_at', '<=', Carbon::now()->subMinute())
+            ->whereNull('deleted_at')
             ->get();
 
-        if ($projects->isEmpty()) {
-            $this->info('No projects to soft delete.');
-            return;
-        }
+        $this->info('Matched projects before cutoff check: ' . $projects->count());
+
+        $count = 0;
 
         foreach ($projects as $project) {
-            $project->delete(); // uses SoftDeletes
+            $completedAt = Carbon::parse($project->completed_at);
+
+            $this->info("Project {$project->id} completed_at: " . $completedAt->toDateTimeString());
+
+            if ($completedAt->lte($cutoff)) {
+                $project->delete();
+
+                $this->info("Project {$project->id} soft deleted.");
+                $count++;
+            } else {
+                $this->info("Project {$project->id} not yet eligible.");
+            }
         }
 
-        $this->info('Completed projects soft deleted successfully.');
+        $this->info("Total soft deleted: {$count}");
+
+        return Command::SUCCESS;
     }
 }
