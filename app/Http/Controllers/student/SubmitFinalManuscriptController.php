@@ -133,7 +133,12 @@ class SubmitFinalManuscriptController extends Controller
 
             $originalName = $file->getClientOriginalName();
             $safeOriginalName = preg_replace('/[^A-Za-z0-9._-]/', '_', $originalName);
-            $storedFileName = now()->format('YmdHis') . '_' . uniqid() . '_' . $safeOriginalName;
+
+            $storedFileName = $this->getAvailableFileName(
+                disk: 'local',
+                directory: 'final_manuscripts',
+                fileName: $safeOriginalName
+            );
 
             $path = $file->storeAs('final_manuscripts', $storedFileName, 'local');
 
@@ -193,6 +198,22 @@ class SubmitFinalManuscriptController extends Controller
                 'error' => 'Failed to submit final manuscript. ' . $e->getMessage(),
             ]);
         }
+    }
+
+    private function getAvailableFileName(string $disk, string $directory, string $fileName): string
+    {
+        $name = pathinfo($fileName, PATHINFO_FILENAME);
+        $extension = pathinfo($fileName, PATHINFO_EXTENSION);
+
+        $finalFileName = $fileName;
+        $counter = 1;
+
+        while (Storage::disk($disk)->exists($directory . '/' . $finalFileName)) {
+            $finalFileName = $name . '_' . $counter . ($extension ? '.' . $extension : '');
+            $counter++;
+        }
+
+        return $finalFileName;
     }
 
     private function getStudentProject(int $userId): ?Project

@@ -54,8 +54,6 @@ const {
     showErrorAlert,
     showInfoAlert,
     confirmDelete,
-    showLoadingAlert,
-    closeAlert,
 } = useAlerts();
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
@@ -83,8 +81,8 @@ function isDragging(sectionKey: string) {
     return !!dragActiveSections.value[sectionKey];
 }
 
-function isUploading(sectionKey: string) {
-    return !!uploadingSections.value[sectionKey];
+function isUploading(sectionKey: string | number) {
+    return !!uploadingSections.value[String(sectionKey)];
 }
 
 function clearFileTooLargeError(key: string | number) {
@@ -107,6 +105,8 @@ function triggerFileInput(key: string | number) {
         showInfoAlert('Upload Disabled', 'Uploads are no longer allowed because this project is already completed.');
         return;
     }
+
+    if (isUploading(key)) return;
 
     fileInputs.value[key]?.click();
 }
@@ -173,7 +173,6 @@ function uploadNewFile(section: SectionItem, file: File | null) {
     formData.append('document', file as File);
 
     uploadingSections.value[section.key] = true;
-    showLoadingAlert('Submitting paper...');
 
     router.post(route('student.submit-paper.store'), formData, {
         forceFormData: true,
@@ -186,19 +185,12 @@ function uploadNewFile(section: SectionItem, file: File | null) {
             const input = fileInputs.value[errorKey];
             if (input) input.value = '';
 
-            closeAlert();
-
-            showSuccessAlert(
-                'Paper Submitted',
-                'Your paper has been submitted successfully.',
-            );
+            showSuccessAlert('Paper Submitted', 'Your paper has been submitted successfully.');
 
             router.reload({ only: ['documents', 'project'] });
         },
 
         onError: (errors) => {
-            closeAlert();
-
             if (errors.document && String(errors.document).toLowerCase().includes('10')) {
                 setFileTooLargeError(errorKey);
             } else {
@@ -241,6 +233,7 @@ function handleDropUpload(event: DragEvent, section: SectionItem) {
     }
 
     if (!canUploadNew(section)) return;
+    if (isUploading(section.key)) return;
 
     const file = event.dataTransfer?.files?.[0] ?? null;
     uploadNewFile(section, file);
@@ -268,7 +261,7 @@ function handleResubmit(event: Event, submissionId: number) {
     const formData = new FormData();
     formData.append('document', file as File);
 
-    showLoadingAlert('Resubmitting paper...');
+    uploadingSections.value[String(submissionId)] = true;
 
     router.post(route('student.submissions.resubmit', { submission: submissionId }), formData, {
         forceFormData: true,
@@ -279,19 +272,12 @@ function handleResubmit(event: Event, submissionId: number) {
             clearFileTooLargeError(submissionId);
             input.value = '';
 
-            closeAlert();
-
-            showSuccessAlert(
-                'Resubmission Successful',
-                'Your document has been resubmitted successfully.',
-            );
+            showSuccessAlert('Resubmission Successful', 'Your document has been resubmitted successfully.');
 
             router.reload({ only: ['documents', 'project'] });
         },
 
         onError: (errors) => {
-            closeAlert();
-
             if (errors.document && String(errors.document).toLowerCase().includes('10')) {
                 setFileTooLargeError(submissionId);
             } else {
@@ -299,6 +285,10 @@ function handleResubmit(event: Event, submissionId: number) {
             }
 
             input.value = '';
+        },
+
+        onFinish: () => {
+            uploadingSections.value[String(submissionId)] = false;
         },
     });
 }
@@ -342,8 +332,6 @@ onMounted(() => {
         showErrorAlert('Error', page.props.flash.error);
     }
 });
-
-
 </script>
 
 <template>
@@ -359,7 +347,7 @@ onMounted(() => {
 
                 <Breadcrumb>
                     <BreadcrumbList>
-                        <BreadcrumbItem>Submissions </BreadcrumbItem>
+                        <BreadcrumbItem>Submissions</BreadcrumbItem>
                     </BreadcrumbList>
                 </Breadcrumb>
             </header>
@@ -367,9 +355,7 @@ onMounted(() => {
             <div class="space-y-6 p-6">
                 <div class="rounded-2xl border border-gray-200 bg-white px-6 py-5 shadow-sm">
                     <h1 class="text-xl font-semibold text-gray-900">Submissions</h1>
-                    <p class="mt-1 text-sm text-gray-500">
-                        Upload and manage your project documents.
-                    </p>
+                    <p class="mt-1 text-sm text-gray-500">Upload and manage your project documents.</p>
                 </div>
 
                 <div v-if="!hasProject" class="flex min-h-[60vh] items-center justify-center">
@@ -398,9 +384,7 @@ onMounted(() => {
                             </div>
 
                             <div>
-                                <h2 class="text-sm font-semibold text-gray-900">
-                                    Project Completed
-                                </h2>
+                                <h2 class="text-sm font-semibold text-gray-900">Project Completed</h2>
                                 <p class="mt-1 text-sm text-gray-600">
                                     This project is already completed. Uploading, resubmission, and file removal are now disabled.
                                 </p>
@@ -433,9 +417,9 @@ onMounted(() => {
                                 <div
                                     role="button"
                                     tabindex="0"
-                                    @click="triggerFileInput(`new-${section.key}`)"
-                                    @keydown.enter.prevent="triggerFileInput(`new-${section.key}`)"
-                                    @keydown.space.prevent="triggerFileInput(`new-${section.key}`)"
+                                    @click="!isUploading(section.key) && triggerFileInput(`new-${section.key}`)"
+                                    @keydown.enter.prevent="!isUploading(section.key) && triggerFileInput(`new-${section.key}`)"
+                                    @keydown.space.prevent="!isUploading(section.key) && triggerFileInput(`new-${section.key}`)"
                                     @dragover.prevent="setDragState(section.key, true)"
                                     @dragleave.prevent="setDragState(section.key, false)"
                                     @drop="handleDropUpload($event, section)"
@@ -444,29 +428,34 @@ onMounted(() => {
                                         isDragging(section.key)
                                             ? 'border-[#0C4B05] bg-green-50 shadow-sm'
                                             : 'border-gray-300 bg-[#fafafa] hover:border-[#0C4B05] hover:bg-green-50/40',
-                                        isUploading(section.key) ? 'pointer-events-none opacity-70' : '',
                                         uploadErrors[`new-${section.key}`] ? 'border-red-300 bg-red-50/40' : '',
                                     ]"
                                 >
                                     <div class="mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-green-50">
-                                        <LoaderCircle
-                                            v-if="isUploading(section.key)"
-                                            class="h-10 w-10 animate-spin text-[#0C4B05]"
-                                        />
-
-                                        <CloudUpload
-                                            v-else
-                                            class="h-10 w-10 text-[#0C4B05]"
-                                        />
+                                        <CloudUpload class="h-10 w-10 text-[#0C4B05]" />
                                     </div>
 
                                     <h3 class="text-[18px] font-semibold text-gray-900">
-                                        {{ isUploading(section.key) ? 'Uploading file...' : 'Click to upload file' }}
+                                        Upload file
                                     </h3>
 
                                     <p class="mt-2 text-sm text-gray-500">
                                         Supported files: PDF
                                     </p>
+
+                                    <button
+                                        type="button"
+                                        :disabled="isUploading(section.key)"
+                                        @click.stop="triggerFileInput(`new-${section.key}`)"
+                                        class="mt-5 inline-flex min-w-[150px] items-center justify-center gap-2 rounded-md bg-[#0C4B05] px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
+                                    >
+                                        <LoaderCircle
+                                            v-if="isUploading(section.key)"
+                                            class="h-4 w-4 animate-spin"
+                                        />
+
+                                        {{ isUploading(section.key) ? 'Uploading...' : 'Choose PDF' }}
+                                    </button>
                                 </div>
 
                                 <p
@@ -534,10 +523,7 @@ onMounted(() => {
                                                         </a>
                                                     </template>
 
-                                                    <p
-                                                        v-else
-                                                        class="block break-words text-sm font-semibold text-gray-900"
-                                                    >
+                                                    <p v-else class="block break-words text-sm font-semibold text-gray-900">
                                                         {{ doc.filename }}
                                                     </p>
 
@@ -563,9 +549,7 @@ onMounted(() => {
                                             </div>
 
                                             <div v-else class="mt-2">
-                                                <p class="text-sm italic text-gray-400">
-                                                    No comment provided
-                                                </p>
+                                                <p class="text-sm italic text-gray-400">No comment provided</p>
                                             </div>
                                         </div>
 
@@ -582,10 +566,16 @@ onMounted(() => {
                                             <button
                                                 v-if="canResubmit(doc)"
                                                 type="button"
+                                                :disabled="isUploading(doc.id)"
                                                 @click="triggerFileInput(doc.id)"
-                                                class="inline-flex min-w-[140px] items-center justify-center rounded-md bg-[#0C4B05] px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90"
+                                                class="inline-flex min-w-[140px] items-center justify-center gap-2 rounded-md bg-[#0C4B05] px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
                                             >
-                                                Resubmit
+                                                <LoaderCircle
+                                                    v-if="isUploading(doc.id)"
+                                                    class="h-4 w-4 animate-spin"
+                                                />
+
+                                                {{ isUploading(doc.id) ? 'Uploading...' : 'Resubmit' }}
                                             </button>
 
                                             <Link
