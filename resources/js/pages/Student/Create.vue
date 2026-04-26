@@ -49,6 +49,14 @@ const adviserResults = ref<SearchUser[]>([])
 const isSearchingAdviser = ref(false)
 let adviserTimeout: ReturnType<typeof setTimeout> | null = null
 
+const getCurrentAcademicYear = () => {
+    const now = new Date()
+    const year = now.getFullYear()
+    const month = now.getMonth() + 1
+
+    return month >= 8 ? `${year}-${year + 1}` : `${year - 1}-${year}`
+}
+
 const getProjectTypeByDepartment = (departmentId: number | string | null) => {
     const department = props.departments.find(
         (d) => d.id === Number(departmentId),
@@ -86,6 +94,7 @@ const displayDepartmentName = computed(() => {
     )
 })
 
+const displayAcademicYear = computed(() => getCurrentAcademicYear())
 const displaySemester = computed(() => '1st Semester')
 
 const displayProjectType = computed(() => {
@@ -94,7 +103,6 @@ const displayProjectType = computed(() => {
 
 const form = useForm({
     title: '',
-    academic_year: '',
     researchers: [] as Array<{ id: number; name: string; email: string }>,
     adviser: null as null | { id: number; name: string; email: string },
     adviser_id: null as number | null,
@@ -228,7 +236,6 @@ const submit = () => {
     setTimeout(() => {
         form.transform((data) => ({
             title: sanitizePlainText(data.title),
-            academic_year: sanitizePlainText(data.academic_year),
             researchers: data.researchers.map((r) => r.id),
             adviser_id: data.adviser ? data.adviser.id : null,
         })).post(route('student.projects.store'), {
@@ -329,21 +336,13 @@ const submit = () => {
 
                     <div>
                         <label class="mb-1 block text-sm font-medium text-gray-700">
-                            Academic Year <span class="text-red-600">*</span>
+                            Academic Year
                         </label>
                         <input
-                            v-model="form.academic_year"
-                            type="text"
-                            placeholder="Enter academic year e.g. 2025-2026"
-                            class="w-full rounded-md border px-3 py-2 text-sm"
+                            :value="displayAcademicYear"
+                            disabled
+                            class="w-full rounded-md border bg-gray-100 px-3 py-2 text-sm"
                         />
-
-                        <div
-                            v-if="form.errors.academic_year"
-                            class="mt-1 text-xs text-red-600"
-                        >
-                            {{ form.errors.academic_year }}
-                        </div>
                     </div>
 
                     <div>
@@ -568,3 +567,16 @@ const submit = () => {
         </SidebarInset>
     </SidebarProvider>
 </template>
+
+
+
+
+
+
+
+
+
+
+
+
+

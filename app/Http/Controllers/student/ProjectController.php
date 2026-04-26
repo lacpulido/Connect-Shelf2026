@@ -17,7 +17,7 @@ class ProjectController extends Controller
 {
     public function create()
     {
-        if (! Auth::check() || (int) Auth::user()->user_type !== 2) {
+        if (!Auth::check() || (int) Auth::user()->user_type !== 2) {
             abort(403);
         }
 
@@ -76,12 +76,12 @@ class ProjectController extends Controller
             }
 
             /**
-             * Locked values from authenticated user/server.
-             * Academic year is intentionally taken from the validated user input.
+             * FORCE LOCKED VALUES FROM DATABASE / SERVER ONLY
+             * Never trust these from client payload.
              */
             $collegeId = $user->college_id;
             $departmentId = $user->department_id;
-            $academicYear = $validated['academic_year'];
+            $academicYear = $this->getCurrentAcademicYear();
             $semester = '1st Semester';
             $projectType = $this->getProjectType($departmentId);
 
@@ -99,7 +99,7 @@ class ProjectController extends Controller
 
             $researchers = $validated['researchers'] ?? [];
 
-            if (! in_array($creatorId, $researchers, true)) {
+            if (!in_array($creatorId, $researchers, true)) {
                 $researchers[] = $creatorId;
             }
 
@@ -135,6 +135,9 @@ class ProjectController extends Controller
                 'status' => 'UNREAD',
             ]);
 
+            /**
+             * Notify all users whose role is Focal Person
+             */
             $focalPersonIds = User::query()
                 ->whereHas('roles', function ($query) {
                     $query->where('name', 'Focal Person');
@@ -170,11 +173,21 @@ class ProjectController extends Controller
         }
     }
 
-    private function getProjectType($departmentId): ?string
+    private function getCurrentAcademicYear()
+    {
+        $year = now()->year;
+        $month = now()->month;
+
+        return $month >= 8
+            ? "$year-" . ($year + 1)
+            : ($year - 1) . "-$year";
+    }
+
+    private function getProjectType($departmentId)
     {
         $department = Department::find($departmentId);
 
-        if (! $department) {
+        if (!$department) {
             return null;
         }
 

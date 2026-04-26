@@ -26,7 +26,6 @@ class StoreProjectRequest extends FormRequest
 
         $this->merge([
             'title' => $this->sanitizeTitle($this->input('title')),
-            'academic_year' => $this->sanitizeAcademicYear($this->input('academic_year')),
             'researchers' => $this->sanitizeIdArray($researchers),
             'adviser_id' => $adviserId,
         ]);
@@ -36,13 +35,6 @@ class StoreProjectRequest extends FormRequest
     {
         return [
             'title' => ['bail', 'required', 'string', 'min:5', 'max:200'],
-
-            'academic_year' => [
-                'bail',
-                'required',
-                'string',
-                'regex:/^\d{4}-\d{4}$/',
-            ],
 
             'researchers' => ['nullable', 'array', 'max:4'],
 
@@ -104,9 +96,6 @@ class StoreProjectRequest extends FormRequest
             'title.min' => 'Project title must be at least 5 characters.',
             'title.max' => 'Project title cannot exceed 200 characters.',
 
-            'academic_year.required' => 'Academic year is required.',
-            'academic_year.regex' => 'Academic year must use this format: 2024-2025.',
-
             'researchers.array' => 'Researchers must be a valid list.',
             'researchers.max' => 'You can only add up to 4 researchers.',
 
@@ -124,7 +113,6 @@ class StoreProjectRequest extends FormRequest
     {
         $this->replace([
             'title' => $this->sanitizeTitle($this->input('title')),
-            'academic_year' => $this->sanitizeAcademicYear($this->input('academic_year')),
             'researchers' => $this->sanitizeIdArray($this->input('researchers', [])),
             'adviser_id' => $this->sanitizeInteger($this->input('adviser_id')),
         ]);
@@ -137,16 +125,6 @@ class StoreProjectRequest extends FormRequest
             ->replaceMatches('/[\x00-\x1F\x7F]/u', '')
             ->squish()
             ->limit(200, '')
-            ->toString();
-    }
-
-    private function sanitizeAcademicYear(mixed $value): string
-    {
-        return Str::of((string) ($value ?? ''))
-            ->stripTags()
-            ->replaceMatches('/[\x00-\x1F\x7F]/u', '')
-            ->squish()
-            ->limit(9, '')
             ->toString();
     }
 
@@ -172,3 +150,5 @@ class StoreProjectRequest extends FormRequest
         }, $values), fn ($value) => $value !== null)));
     }
 }
+
+
