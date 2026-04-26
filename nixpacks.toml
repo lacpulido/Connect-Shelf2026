@@ -1,0 +1,23 @@
+[phases.setup]
+nixPkgs = [
+  "php85",
+  "php85Extensions.mbstring",
+  "php85Extensions.iconv",
+  "php85Extensions.zip",
+  "nodejs_22",
+  "composer"
+]
+
+[phases.install]
+cmds = [
+  "composer install --no-dev --optimize-autoloader --ignore-platform-reqs",
+  "npm ci"
+]
+
+[phases.build]
+cmds = [
+  "npm run build"
+]
+
+[start]
+cmd = "php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=${PORT:-8000}"
