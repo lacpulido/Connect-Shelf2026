@@ -11,6 +11,8 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
 class SubmitFinalManuscriptController extends Controller
@@ -21,7 +23,7 @@ class SubmitFinalManuscriptController extends Controller
 
         $project = $this->getStudentProject($userId);
 
-        if (!$project) {
+        if (! $project) {
             return Inertia::render('Student/SubmitFinalManuscript', [
                 'project' => null,
                 'manuscriptSubmitted' => false,
@@ -47,10 +49,10 @@ class SubmitFinalManuscriptController extends Controller
                 'project_type' => $project->project_type,
                 'adviser_id' => $project->adviser_id,
             ],
-            'manuscriptSubmitted' => $manuscript ? true : false,
+            'manuscriptSubmitted' => (bool) $manuscript,
             'manuscriptStatus' => $manuscript->status ?? null,
             'manuscriptFileName' => $manuscript->original_filename ?? $manuscript->filename ?? null,
-            'canSubmitFinalManuscript' => $approvedDocument ? true : false,
+            'canSubmitFinalManuscript' => (bool) $approvedDocument,
             'approvedManuscriptDocument' => $approvedDocument ? [
                 'id' => $approvedDocument->id,
                 'title' => $approvedDocument->title,
@@ -66,17 +68,24 @@ class SubmitFinalManuscriptController extends Controller
 
         try {
             $user = Auth::user();
-            $userId = $user->id;
+
+            if (! $user) {
+                DB::rollBack();
+
+                return back()->withErrors([
+                    'error' => 'You must be logged in to submit a final manuscript.',
+                ]);
+            }
 
             $validated = $request->validate([
-                'title' => 'required|string|max:255',
-                'abstract' => 'required|string',
-                'manuscript' => 'required|file|mimes:pdf,doc,docx|max:10240',
+                'title' => ['required', 'string', 'max:255'],
+                'abstract' => ['required', 'string'],
+                'manuscript' => ['required', 'file', 'mimes:pdf', 'max:10240'],
             ]);
 
-            $project = $this->getStudentProject($userId);
+            $project = $this->getStudentProject($user->id);
 
-            if (!$project) {
+            if (! $project) {
                 DB::rollBack();
 
                 return back()->withErrors([
@@ -86,7 +95,7 @@ class SubmitFinalManuscriptController extends Controller
 
             $approvedDocument = $this->getApprovedManuscriptDocument($project->id);
 
-            if (!$approvedDocument) {
+            if (! $approvedDocument) {
                 DB::rollBack();
 
                 return back()->withErrors([
@@ -102,11 +111,35 @@ class SubmitFinalManuscriptController extends Controller
                 ]);
             }
 
-            $file = $request->file('manuscript');
-            $originalName = $file->getClientOriginalName();
+            if (! $request->hasFile('manuscript')) {
+                DB::rollBack();
 
-            $storedFileName = time() . '_' . $originalName;
-            $file->storeAs('final_manuscripts', $storedFileName, 'local');
+                return back()->withErrors([
+                    'manuscript' => 'Please upload a manuscript file.',
+                ]);
+            }
+
+            $file = $request->file('manuscript');
+
+            if (! $file->isValid()) {
+                DB::rollBack();
+
+                return back()->withErrors([
+                    'manuscript' => 'Uploaded file is invalid. Please try again.',
+                ]);
+            }
+
+            Storage::disk('local')->makeDirectory('final_manuscripts');
+
+            $originalName = $file->getClientOriginalName();
+            $safeOriginalName = preg_replace('/[^A-Za-z0-9._-]/', '_', $originalName);
+            $storedFileName = now()->format('YmdHis') . '_' . uniqid() . '_' . $safeOriginalName;
+
+            $path = $file->storeAs('final_manuscripts', $storedFileName, 'local');
+
+            if (! $path || ! Storage::disk('local')->exists($path)) {
+                throw new \Exception('Failed to upload manuscript file.');
+            }
 
             $manuscript = ProjectManuscript::create([
                 'project_id' => $project->id,
@@ -118,6 +151,10 @@ class SubmitFinalManuscriptController extends Controller
             ]);
 
             $submitterName = trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? ''));
+
+            if ($submitterName === '') {
+                $submitterName = $user->name ?? 'A student';
+            }
 
             $departmentChairs = User::query()
                 ->where('department_id', $project->department_id)
@@ -147,8 +184,13 @@ class SubmitFinalManuscriptController extends Controller
         } catch (\Throwable $e) {
             DB::rollBack();
 
-            return back()->withErrors([
+            Log::error('Final manuscript submit failed.', [
+                'user_id' => Auth::id(),
                 'error' => $e->getMessage(),
+            ]);
+
+            return back()->withErrors([
+                'error' => 'Failed to submit final manuscript. ' . $e->getMessage(),
             ]);
         }
     }
