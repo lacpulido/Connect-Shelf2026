@@ -43,11 +43,12 @@ COPY . .
 COPY --from=vendor /app/vendor ./vendor
 COPY --from=assets /app/public/build ./public/build
 
+COPY docker/php/uploads.ini /usr/local/etc/php/conf.d/uploads.ini
+
 RUN composer dump-autoload --optimize \
-    && mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache \
+    && mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache storage/app/final_manuscripts \
     && chmod -R 775 storage bootstrap/cache
 
 EXPOSE 8000
 
-CMD php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=${PORT:-8000}
-COPY docker/php/uploads.ini /usr/local/etc/php/conf.d/uploads.ini
+CMD php artisan serve --host=0.0.0.0 --port=${PORT:-8000}
