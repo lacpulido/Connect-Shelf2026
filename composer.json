@@ -10,6 +10,9 @@
     "license": "MIT",
     "require": {
         "php": "^8.2",
+        "ext-iconv": "*",
+        "ext-mbstring": "*",
+        "ext-zip": "*",
         "inertiajs/inertia-laravel": "^2.0",
         "laravel/framework": "^12.0",
         "laravel/reverb": "^1.7",
@@ -19,6 +22,7 @@
         "resend/resend-laravel": "^1.3",
         "socialiteproviders/manager": "^4.8",
         "socialiteproviders/microsoft": "^4.7",
+        "symfony/options-resolver": "^7.0",
         "tightenco/ziggy": "^2.4",
         "typesense/typesense-php": "*"
     },
