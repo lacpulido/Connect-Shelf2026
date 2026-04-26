@@ -343,9 +343,7 @@ onMounted(() => {
     }
 });
 
-usePoll(2000, {
-    only: ['documents', 'project'],
-});
+
 </script>
 
 <template>
