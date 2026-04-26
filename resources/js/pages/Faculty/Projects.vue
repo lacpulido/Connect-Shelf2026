@@ -102,7 +102,7 @@ function projectUrl(project: ProjectCard): string {
                 <div class="rounded-xl border border-gray-200 bg-white px-6 py-5 shadow-sm">
                     <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                         <div>
-                            <h1 class="text-2xl font-bold text-gray-900">Your Projects</h1>
+                            <h1 class="text-2xl font-bold text-gray-900"> Projects</h1>
                             <p class="mt-1 text-sm text-gray-500">
                                 View and manage all assigned projects.
                             </p>

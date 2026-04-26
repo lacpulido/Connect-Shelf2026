@@ -18,7 +18,7 @@ class StoreProjectRequest extends FormRequest
     {
         $researchers = $this->input('researchers', []);
 
-        if (!is_array($researchers)) {
+        if (! is_array($researchers)) {
             $researchers = [];
         }
 
@@ -26,6 +26,7 @@ class StoreProjectRequest extends FormRequest
 
         $this->merge([
             'title' => $this->sanitizeTitle($this->input('title')),
+            'academic_year' => $this->sanitizeAcademicYear($this->input('academic_year')),
             'researchers' => $this->sanitizeIdArray($researchers),
             'adviser_id' => $adviserId,
         ]);
@@ -34,7 +35,14 @@ class StoreProjectRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'title' => ['bail', 'required', 'string', 'min:5', 'max:50'],
+            'title' => ['bail', 'required', 'string', 'min:5', 'max:200'],
+
+            'academic_year' => [
+                'bail',
+                'required',
+                'string',
+                'regex:/^\d{4}-\d{4}$/',
+            ],
 
             'researchers' => ['nullable', 'array', 'max:4'],
 
@@ -46,7 +54,7 @@ class StoreProjectRequest extends FormRequest
                 function ($attribute, $value, $fail) {
                     $user = User::find($value);
 
-                    if (!$user || (int) $user->user_type !== 2) {
+                    if (! $user || (int) $user->user_type !== 2) {
                         $fail('Selected researcher must be a student.');
                         return;
                     }
@@ -64,7 +72,7 @@ class StoreProjectRequest extends FormRequest
                 function ($attribute, $value, $fail) {
                     $user = User::with('roles')->find($value);
 
-                    if (!$user) {
+                    if (! $user) {
                         $fail('Selected adviser does not exist.');
                         return;
                     }
@@ -94,7 +102,10 @@ class StoreProjectRequest extends FormRequest
         return [
             'title.required' => 'Project title is required.',
             'title.min' => 'Project title must be at least 5 characters.',
-            'title.max' => 'Project title cannot exceed 50 characters.',
+            'title.max' => 'Project title cannot exceed 200 characters.',
+
+            'academic_year.required' => 'Academic year is required.',
+            'academic_year.regex' => 'Academic year must use this format: 2025-2026.',
 
             'researchers.array' => 'Researchers must be a valid list.',
             'researchers.max' => 'You can only add up to 4 researchers.',
@@ -113,6 +124,7 @@ class StoreProjectRequest extends FormRequest
     {
         $this->replace([
             'title' => $this->sanitizeTitle($this->input('title')),
+            'academic_year' => $this->sanitizeAcademicYear($this->input('academic_year')),
             'researchers' => $this->sanitizeIdArray($this->input('researchers', [])),
             'adviser_id' => $this->sanitizeInteger($this->input('adviser_id')),
         ]);
@@ -124,7 +136,17 @@ class StoreProjectRequest extends FormRequest
             ->stripTags()
             ->replaceMatches('/[\x00-\x1F\x7F]/u', '')
             ->squish()
-            ->limit(50, '')
+            ->limit(200, '')
+            ->toString();
+    }
+
+    private function sanitizeAcademicYear(mixed $value): string
+    {
+        return Str::of((string) ($value ?? ''))
+            ->stripTags()
+            ->replaceMatches('/[\x00-\x1F\x7F]/u', '')
+            ->squish()
+            ->limit(9, '')
             ->toString();
     }
 
@@ -141,7 +163,7 @@ class StoreProjectRequest extends FormRequest
 
     private function sanitizeIdArray(mixed $values): array
     {
-        if (!is_array($values)) {
+        if (! is_array($values)) {
             return [];
         }
 

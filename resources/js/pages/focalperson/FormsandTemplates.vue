@@ -1,16 +1,16 @@
 <script setup lang="ts">
 import AppSidebar from '@/components/AppSidebar.vue';
 import { Breadcrumb, BreadcrumbItem as CrumbItem, BreadcrumbList } from '@/components/ui/breadcrumb';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Separator } from '@/components/ui/separator';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { useAlerts } from '@/composables/useAlerts';
 import { Head, router, usePage, usePoll } from '@inertiajs/vue3';
-import { ChevronDown } from 'lucide-vue-next';
+import { ChevronDown, FileText } from 'lucide-vue-next';
 import { computed, nextTick, ref, watch } from 'vue';
 
 const {
     showSuccessAlert,
-    showInfoAlert,
     showWarningAlert,
     confirmDelete,
     showLoadingAlert,
@@ -19,7 +19,6 @@ const {
 
 type Form = {
     id: number;
-    title: string;
     file_name: string;
     created_at: string;
     section: string;
@@ -107,6 +106,7 @@ const openUpload = async (sectionName: string) => {
 
 const handleDirectFileUpload = (event: Event, sectionName: string) => {
     const input = event.target as HTMLInputElement;
+
     sectionErrors.value[sectionName] = '';
 
     if (!input.files?.length) return;
@@ -121,7 +121,6 @@ const handleDirectFileUpload = (event: Event, sectionName: string) => {
     }
 
     const formData = new FormData();
-    formData.append('title', file.name.replace(/\.[^/.]+$/, ''));
     formData.append('file', file);
     formData.append('section', sectionName);
 
@@ -131,25 +130,32 @@ const handleDirectFileUpload = (event: Event, sectionName: string) => {
 
         onBefore: () => {
             uploadingSection.value = sectionName;
+            sectionErrors.value[sectionName] = '';
+            showLoadingAlert('Uploading...');
         },
 
         onSuccess: () => {
+            closeAlert();
+            showSuccessAlert('Uploaded!', 'File uploaded successfully.');
+
             router.reload({
                 only: ['forms'],
                 preserveScroll: true,
             });
+
             input.value = '';
             uploadingSection.value = null;
             sectionErrors.value[sectionName] = '';
         },
 
         onError: (errors) => {
+            closeAlert();
+
             input.value = '';
             uploadingSection.value = null;
 
             sectionErrors.value[sectionName] =
                 errors.file ||
-                errors.title ||
                 errors.section ||
                 'Upload failed. Please try again.';
         },
@@ -161,7 +167,6 @@ const handleDirectFileUpload = (event: Event, sectionName: string) => {
 };
 
 function downloadFile(id: number) {
-    showInfoAlert('Downloading...', 'Your file will open shortly.');
     window.open(route('focalperson.forms.download', { id }), '_blank');
 }
 
@@ -179,6 +184,7 @@ async function deleteForm(id: number) {
             onSuccess: () => {
                 closeAlert();
                 showSuccessAlert('Deleted!', 'File removed successfully.');
+
                 router.reload({
                     only: ['forms'],
                     preserveScroll: true,
@@ -188,6 +194,10 @@ async function deleteForm(id: number) {
             onError: () => {
                 closeAlert();
                 sectionErrors.value.general = 'Delete failed. Please try again.';
+            },
+
+            onFinish: () => {
+                closeAlert();
             },
         });
     }
@@ -223,6 +233,7 @@ async function deleteForm(id: number) {
                         </div>
 
                         <button
+                            type="button"
                             @click="showSectionModal = true"
                             class="rounded-md bg-[#0C4B05] px-4 py-2 text-sm text-white hover:opacity-90"
                         >
@@ -238,19 +249,28 @@ async function deleteForm(id: number) {
                     {{ sectionErrors.general }}
                 </p>
 
-                <div v-if="sectionList.length === 0" class="flex justify-center py-16">
-                    <div class="w-full max-w-md rounded-2xl border border-dashed px-6 py-10 text-center">
-                        <p class="text-sm text-gray-500">
-                            No Available Forms and Templates.
-                        </p>
-                    </div>
+                <div v-if="sectionList.length === 0" class="flex min-h-[55vh] items-center justify-center">
+                    <Empty class="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-sm">
+                        <EmptyHeader>
+                            <EmptyMedia variant="icon">
+                                <FileText />
+                            </EmptyMedia>
+                        </EmptyHeader>
+
+                        <EmptyTitle>No Forms Available</EmptyTitle>
+                        <EmptyDescription>
+                            Once you add a section and upload forms or templates, they will appear here.
+                        </EmptyDescription>
+
+                       
+                    </Empty>
                 </div>
 
                 <div v-else class="space-y-4">
                     <div
                         v-for="(sectionForms, sectionName) in groupedSections"
                         :key="sectionName"
-                        class="rounded-xl border p-4"
+                        class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
                     >
                         <input
                             type="file"
@@ -264,10 +284,10 @@ async function deleteForm(id: number) {
                                 class="flex cursor-pointer items-center gap-2"
                                 @click="toggleSection(String(sectionName))"
                             >
-                                <h3 class="font-semibold">{{ sectionName }}</h3>
+                                <h3 class="font-semibold text-gray-900">{{ sectionName }}</h3>
 
                                 <ChevronDown
-                                    class="h-5 w-5 transition-transform"
+                                    class="h-5 w-5 text-gray-500 transition-transform"
                                     :class="{ 'rotate-180': openSections[String(sectionName)] }"
                                 />
                             </div>
@@ -295,16 +315,19 @@ async function deleteForm(id: number) {
                                 :key="form.id"
                                 class="flex items-center justify-between border-b pb-3 last:border-none"
                             >
-                                <div>
-                                    <p class="font-medium text-black">{{ form.title }}</p>
-                                    <p class="text-sm text-gray-500">{{ form.file_name }}</p>
+                                <div class="min-w-0">
+                                    <button
+                                        type="button"
+                                        @click="downloadFile(form.id)"
+                                        class="block max-w-full truncate text-left text-sm font-semibold text-[#0C4B05] no-underline transition hover:text-[#083803] hover:underline hover:underline-offset-4"
+                                    >
+                                        {{ form.file_name }}
+                                    </button>
                                 </div>
 
-                                <div class="flex gap-4">
-                                  
-                        
-
+                                <div class="flex shrink-0 gap-4">
                                     <button
+                                        type="button"
                                         @click="deleteForm(form.id)"
                                         class="text-sm font-medium text-red-600 underline underline-offset-2 transition hover:text-red-700"
                                     >
@@ -328,7 +351,7 @@ async function deleteForm(id: number) {
         <teleport to="body">
             <div
                 v-if="showSectionModal"
-                class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 px-4 pt-14 pb-6 backdrop-blur-sm"
+                class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 px-4 pt-32 pb-6 backdrop-blur-sm"
                 @click.self="closeSectionModal"
             >
                 <div class="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/5">
@@ -376,23 +399,15 @@ async function deleteForm(id: number) {
                             </div>
                         </div>
 
-                        <div class="mt-5 flex justify-end gap-3">
-                            <button
-                                type="button"
-                                @click="closeSectionModal"
-                                class="rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-100"
-                            >
-                                Cancel
-                            </button>
-
-                            <button
-                                type="button"
-                                @click="createSection"
-                                class="rounded-xl bg-[#0C4B05] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#0a3d04]"
-                            >
-                                Save
-                            </button>
-                        </div>
+                       <div class="mt-5 flex justify-end gap-3">
+    <button
+        type="button"
+        @click="createSection"
+        class="inline-flex min-w-[140px] items-center justify-center rounded-md bg-[#0C4B05] px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90"
+    >
+        Save
+    </button>
+</div>
                     </div>
                 </div>
             </div>

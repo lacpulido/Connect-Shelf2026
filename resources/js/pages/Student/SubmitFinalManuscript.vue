@@ -229,18 +229,22 @@ function submit() {
                     </Empty>
                 </div>
 
-                <div v-else-if="!canSubmitFinalManuscript" class="flex min-h-[60vh] items-center justify-center">
-                    <Empty class="w-full max-w-md rounded-2xl border border-amber-200 bg-amber-50 shadow-sm">
-                        <EmptyHeader>
-                            <EmptyMedia variant="icon">
-                                <LockKeyhole />
-                            </EmptyMedia>
-                        </EmptyHeader>
+              <div v-else-if="!canSubmitFinalManuscript" class="flex min-h-[60vh] items-center justify-center">
+    <Empty class="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <EmptyHeader>
+            <EmptyMedia variant="icon">
+                <LockKeyhole />
+            </EmptyMedia>
+        </EmptyHeader>
 
-                        <EmptyTitle>Final Manuscript Locked</EmptyTitle>
-                        <EmptyDescription> Your Manuscript document must be approved by your adviser. </EmptyDescription>
-                    </Empty>
-                </div>
+        <EmptyTitle>Final Manuscript </EmptyTitle>
+        <EmptyDescription>
+            Your Manuscript document must be approved by your adviser before submitting the final manuscript.
+        </EmptyDescription>
+
+        <EmptyContent />
+    </Empty>
+</div>
 
                 <div v-else class="w-full rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
                     <form @submit.prevent="submit" class="space-y-8">

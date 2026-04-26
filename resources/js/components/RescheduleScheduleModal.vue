@@ -1,13 +1,31 @@
 <script setup lang="ts">
+import { Button } from '@/components/ui/button'
+import { Calendar } from '@/components/ui/calendar'
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover'
 import { useAlerts } from '@/composables/useAlerts'
+import { cn } from '@/lib/utils'
+import type { DateValue } from '@internationalized/date'
+import {
+    DateFormatter,
+    getLocalTimeZone,
+    parseDate,
+    today,
+} from '@internationalized/date'
 import { router } from '@inertiajs/vue3'
-import { computed, ref, watch } from 'vue'
+import { CalendarIcon } from 'lucide-vue-next'
+import { ref, watch } from 'vue'
 
 interface Schedule {
     id: number
     project_title: string
     defense_date: string | null
     defense_time: string | null
+    requested_defense_date?: string | null
+    requested_defense_time?: string | null
 }
 
 const props = defineProps<{
@@ -22,7 +40,7 @@ const emit = defineEmits<{
 
 const { showSuccessAlert, showWarningAlert, showErrorAlert } = useAlerts()
 
-const preferredDate = ref('')
+const preferredDate = ref<DateValue>()
 const preferredTime = ref('')
 const submitting = ref(false)
 
@@ -32,20 +50,48 @@ const allowedTimeSlots = [
     '2:00 PM - 5:00 PM',
 ]
 
-const today = computed(() => new Date().toISOString().split('T')[0])
+const defaultPlaceholder = today(getLocalTimeZone())
+
+const df = new DateFormatter('en-US', {
+    dateStyle: 'long',
+})
+
+const toDateValue = (date?: string | null) => {
+    if (!date) return undefined
+
+    try {
+        return parseDate(date)
+    } catch {
+        return undefined
+    }
+}
+
+const toBackendDate = (date?: DateValue) => {
+    if (!date) return ''
+
+    return date.toDate(getLocalTimeZone()).toISOString().split('T')[0]
+}
 
 watch(
     () => props.show,
     (visible) => {
         if (visible && props.schedule) {
-            preferredDate.value = props.schedule.defense_date ?? ''
-            preferredTime.value = props.schedule.defense_time ?? ''
+            const dateToUse =
+                props.schedule.requested_defense_date ??
+                props.schedule.defense_date
+
+            const timeToUse =
+                props.schedule.requested_defense_time ??
+                props.schedule.defense_time
+
+            preferredDate.value = toDateValue(dateToUse)
+            preferredTime.value = timeToUse ?? ''
         } else {
-            preferredDate.value = ''
+            preferredDate.value = undefined
             preferredTime.value = ''
             submitting.value = false
         }
-    }
+    },
 )
 
 const closeModal = () => {
@@ -55,7 +101,9 @@ const closeModal = () => {
 const submitReschedule = () => {
     if (!props.schedule || submitting.value) return
 
-    if (!preferredDate.value || !preferredTime.value) {
+    const formattedPreferredDate = toBackendDate(preferredDate.value)
+
+    if (!formattedPreferredDate || !preferredTime.value) {
         showWarningAlert('Missing Fields', 'Please fill in all fields.')
         return
     }
@@ -67,7 +115,7 @@ const submitReschedule = () => {
             id: props.schedule.id,
         }),
         {
-            preferred_date: preferredDate.value,
+            preferred_date: formattedPreferredDate,
             preferred_time: preferredTime.value,
         },
         {
@@ -83,7 +131,7 @@ const submitReschedule = () => {
             onFinish: () => {
                 submitting.value = false
             },
-        }
+        },
     )
 }
 </script>
@@ -123,18 +171,45 @@ const submitReschedule = () => {
                                 <label class="mb-2 block text-sm font-semibold text-gray-700">
                                     Preferred Date
                                 </label>
-                                <input
-                                    v-model="preferredDate"
-                                    type="date"
-                                    :min="today"
-                                    class="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-700 focus:border-[#0C4B05] focus:outline-none focus:ring-2 focus:ring-[#0C4B05]/20"
-                                />
+
+                                <Popover>
+                                    <PopoverTrigger as-child>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            :class="
+                                                cn(
+                                                    'h-[46px] w-full justify-start rounded-xl border-gray-300 bg-white px-4 text-left text-sm font-normal text-gray-700 shadow-none hover:bg-white',
+                                                    !preferredDate && 'text-muted-foreground',
+                                                )
+                                            "
+                                        >
+                                            <CalendarIcon class="mr-2 h-4 w-4" />
+                                            {{
+                                                preferredDate
+                                                    ? df.format(preferredDate.toDate(getLocalTimeZone()))
+                                                    : 'Pick a date'
+                                            }}
+                                        </Button>
+                                    </PopoverTrigger>
+
+                                    <PopoverContent class="w-auto p-0" align="start">
+                                        <Calendar
+                                            v-model="preferredDate"
+                                            :default-placeholder="defaultPlaceholder"
+                                            :min-value="defaultPlaceholder"
+                                            layout="month-and-year"
+                                            initial-focus
+                                        />
+                                    </PopoverContent>
+                                </Popover>
                             </div>
 
                             <div>
                                 <label class="mb-2 block text-sm font-semibold text-gray-700">
                                     Preferred Time
                                 </label>
+
                                 <select
                                     v-model="preferredTime"
                                     class="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-700 focus:border-[#0C4B05] focus:outline-none focus:ring-2 focus:ring-[#0C4B05]/20"

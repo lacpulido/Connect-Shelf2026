@@ -49,17 +49,7 @@ const adviserResults = ref<SearchUser[]>([])
 const isSearchingAdviser = ref(false)
 let adviserTimeout: ReturnType<typeof setTimeout> | null = null
 
-const getCurrentAcademicYear = () => {
-    const now = new Date()
-    const year = now.getFullYear()
-    const month = now.getMonth() + 1
-
-    return month >= 8 ? `${year}-${year + 1}` : `${year - 1}-${year}`
-}
-
-const getProjectTypeByDepartment = (
-    departmentId: number | string | null,
-) => {
+const getProjectTypeByDepartment = (departmentId: number | string | null) => {
     const department = props.departments.find(
         (d) => d.id === Number(departmentId),
     )
@@ -78,15 +68,10 @@ const sanitizePlainText = (value: string) => {
     return value
         .replace(/<[^>]*>/g, '')
         .replace(/[\u0000-\u001F\u007F]/g, '')
-        .replace(/\s+/g, ' ')
         .trim()
-        .slice(0, 50)
+        .slice(0, 200)
 }
 
-/**
- * Display-only values from authenticated user / server-side defaults.
- * These are shown in the UI, but not trusted by the backend.
- */
 const displayCollegeName = computed(() => {
     return (
         props.colleges.find((c) => c.id === props.authUser.college_id)?.name ??
@@ -101,34 +86,19 @@ const displayDepartmentName = computed(() => {
     )
 })
 
-const displayAcademicYear = computed(() => getCurrentAcademicYear())
 const displaySemester = computed(() => '1st Semester')
 
 const displayProjectType = computed(() => {
     return getProjectTypeByDepartment(props.authUser.department_id)
 })
 
-/**
- * Only user-editable fields are kept in the form payload.
- * Server will supply the locked/default fields.
- */
 const form = useForm({
     title: '',
+    academic_year: '',
     researchers: [] as Array<{ id: number; name: string; email: string }>,
     adviser: null as null | { id: number; name: string; email: string },
     adviser_id: null as number | null,
 })
-
-watch(
-    () => form.title,
-    (value) => {
-        const sanitized = sanitizePlainText(value ?? '')
-
-        if (sanitized !== value) {
-            form.title = sanitized
-        }
-    },
-)
 
 watch(searchQuery, (value) => {
     if (timeout) clearTimeout(timeout)
@@ -258,6 +228,7 @@ const submit = () => {
     setTimeout(() => {
         form.transform((data) => ({
             title: sanitizePlainText(data.title),
+            academic_year: sanitizePlainText(data.academic_year),
             researchers: data.researchers.map((r) => r.id),
             adviser_id: data.adviser ? data.adviser.id : null,
         })).post(route('student.projects.store'), {
@@ -309,7 +280,6 @@ const submit = () => {
                     @submit.prevent="submit"
                     class="grid grid-cols-1 gap-4 md:grid-cols-2"
                 >
-                    <!-- Project Title -->
                     <div class="md:col-span-2">
                         <label class="mb-1 block text-sm font-medium text-gray-700">
                             Project Title <span class="text-red-600">*</span>
@@ -318,7 +288,8 @@ const submit = () => {
                         <input
                             v-model="form.title"
                             type="text"
-                            maxlength="50"
+                            maxlength="200"
+                            placeholder="Enter project title"
                             class="w-full rounded-md border px-3 py-2 text-sm"
                         />
 
@@ -327,13 +298,13 @@ const submit = () => {
                                 {{ form.errors.title }}
                             </div>
                             <div v-else></div>
+
                             <div class="text-xs text-gray-500">
-                                {{ form.title.length }}/50
+                                {{ form.title.length }}/200
                             </div>
                         </div>
                     </div>
 
-                    <!-- College -->
                     <div>
                         <label class="mb-1 block text-sm font-medium text-gray-700">
                             College
@@ -345,7 +316,6 @@ const submit = () => {
                         />
                     </div>
 
-                    <!-- Department -->
                     <div>
                         <label class="mb-1 block text-sm font-medium text-gray-700">
                             Department
@@ -357,19 +327,25 @@ const submit = () => {
                         />
                     </div>
 
-                    <!-- Academic Year -->
                     <div>
                         <label class="mb-1 block text-sm font-medium text-gray-700">
-                            Academic Year
+                            Academic Year <span class="text-red-600">*</span>
                         </label>
                         <input
-                            :value="displayAcademicYear"
-                            disabled
-                            class="w-full rounded-md border bg-gray-100 px-3 py-2 text-sm"
+                            v-model="form.academic_year"
+                            type="text"
+                            placeholder="Enter academic year e.g. 2025-2026"
+                            class="w-full rounded-md border px-3 py-2 text-sm"
                         />
+
+                        <div
+                            v-if="form.errors.academic_year"
+                            class="mt-1 text-xs text-red-600"
+                        >
+                            {{ form.errors.academic_year }}
+                        </div>
                     </div>
 
-                    <!-- Semester -->
                     <div>
                         <label class="mb-1 block text-sm font-medium text-gray-700">
                             Semester
@@ -381,7 +357,6 @@ const submit = () => {
                         />
                     </div>
 
-                    <!-- Project Type -->
                     <div class="md:col-span-2">
                         <label class="mb-1 block text-sm font-medium text-gray-700">
                             Project Type
@@ -393,7 +368,6 @@ const submit = () => {
                         />
                     </div>
 
-                    <!-- Researchers -->
                     <div class="min-w-0">
                         <div class="flex h-full flex-col">
                             <div class="mb-3 min-h-[58px]">
@@ -498,7 +472,6 @@ const submit = () => {
                         </div>
                     </div>
 
-                    <!-- Adviser -->
                     <div class="min-w-0">
                         <div class="flex h-full flex-col">
                             <div class="mb-3 min-h-[58px]">
@@ -577,7 +550,6 @@ const submit = () => {
                         </div>
                     </div>
 
-                    <!-- Submit -->
                     <div class="pt-2 md:col-span-2">
                         <button
                             type="submit"

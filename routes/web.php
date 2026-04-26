@@ -40,6 +40,7 @@ use App\Http\Controllers\FocalPerson\FormsAndTemplatesController;
 use App\Http\Controllers\FocalPerson\DepartmentFacultyController;
 use App\Http\Controllers\DepartmentChair\ResearchArchiveController;
 use App\Http\Controllers\DepartmentChair\FinalManuscriptReviewController;
+use App\Http\Controllers\FocalPerson\ManageProjectController;
 use App\Http\Controllers\ManuscriptController;
 use App\Http\Controllers\public\ThesisProjectController;
 use App\Http\Controllers\public\CapstoneProjectController;
@@ -280,7 +281,6 @@ Route::middleware(['auth', 'verified', 'access:faculty'])
 
         Route::post('/projects/{project}/accept-adviser', [ProjectController::class, 'acceptAdviser'])
             ->name('projects.accept-adviser');
-        
     });
 //Department Chair Routes
 Route::middleware(['auth', 'verified', 'access:Department ChairPerson'])
@@ -318,59 +318,41 @@ Route::middleware(['auth', 'verified', 'access:Focal Person'])
     ->name('focalperson.')
     ->group(function () {
 
-        Route::get(
-            '/projects',
-            [AssignAdviserToProjectsController::class, 'index']
-        )->name('projects');
+        Route::get('/projects', [AssignAdviserToProjectsController::class, 'index'])
+            ->name('projects');
 
-        Route::get(
-            '/projects',
-            [AssignAdviserToProjectsController::class, 'index']
-        )->name('listofprojects');
+        Route::get('/list-of-projects', [AssignAdviserToProjectsController::class, 'index'])
+            ->name('listofprojects');
 
-        Route::post(
-            '/projects/{project:slug}/assign',
-            [AssignAdviserToProjectsController::class, 'assign']
-        )->name('projects.assign');
+        Route::post('/projects/{project:slug}/assign', [AssignAdviserToProjectsController::class, 'assign'])
+            ->name('projects.assign');
 
-        Route::post(
-            '/schedule/store',
-            [SetScheduleController::class, 'store']
-        )->name('schedule.store');
+        Route::get('/projects/{project:slug}/manage', [ManageProjectController::class, 'manage'])
+            ->name('projects.manage');
 
-        Route::get(
-            '/projects/{project}/assign-panelists',
-            [AssignPanelistToProjectsController::class, 'index']
-        )->name('panelists.index');
+        Route::post('/schedule/store', [ManageProjectController::class, 'storeSchedule'])
+            ->name('schedule.store');
 
-        Route::post(
-            '/projects/assign-panelists',
-            [AssignPanelistToProjectsController::class, 'store']
-        )->name('panelists.store');
+        Route::post('/panelists/store', [ManageProjectController::class, 'storePanelist'])
+            ->name('panelists.store');
 
-        Route::get(
-            '/forms-and-templates',
-            [FormsAndTemplatesController::class, 'index']
-        )->name('forms.templates');
+        Route::get('/forms-and-templates', [FormsAndTemplatesController::class, 'index'])
+            ->name('forms.templates');
 
-        Route::post(
-            '/forms/store',
-            [FormsAndTemplatesController::class, 'store']
-        )->name('forms.store');
-
+        Route::post('/forms/store', [FormsAndTemplatesController::class, 'store'])
+            ->name('forms.store');
 
         Route::get('/forms/download/{id}', [FormsAndTemplatesController::class, 'download'])
             ->name('forms.download');
 
-        Route::get(
-            '/department-faculty',
-            [DepartmentFacultyController::class, 'index']
-        )->name('department.faculty');
+        Route::delete('/forms/{id}', [FormsAndTemplatesController::class, 'destroy'])
+            ->name('forms.destroy');
 
-        Route::delete(
-            '/forms/{id}',
-            [FormsAndTemplatesController::class, 'destroy']
-        )->name('forms.destroy');
+        Route::get('/department-faculty', [DepartmentFacultyController::class, 'index'])
+            ->name('department.faculty');
+
+        Route::post('/projects/mark-first-semester-passed', [ManageProjectController::class, 'markFirstSemesterPassed'])
+            ->name('projects.mark-first-semester-passed');
     });
 //Notifications
 Route::middleware(['auth'])->group(function () {

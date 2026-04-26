@@ -15,6 +15,9 @@ class Schedule extends Model
          'status',
         'is_confirmed',
         'reschedule_requested',
+        'requested_defense_date',
+        'requested_defense_time',
+  
     ];
 
     protected $casts = [

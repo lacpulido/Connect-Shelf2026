@@ -4,12 +4,13 @@ namespace App\Http\Controllers\FocalPerson;
 
 use App\Http\Controllers\Controller;
 use App\Models\Form;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class FormsAndTemplatesController extends Controller
 {
@@ -21,7 +22,6 @@ class FormsAndTemplatesController extends Controller
             ->map(function ($form) {
                 return [
                     'id' => $form->id,
-                    'title' => $form->title,
                     'file_name' => $form->file_name,
                     'section' => $form->section,
                     'created_at' => $form->created_at,
@@ -36,31 +36,38 @@ class FormsAndTemplatesController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $request->validate([
-            'title' => ['required', 'string', 'max:150'],
-            'file' => ['required', 'file', 'max:10240'], // 10MB, any file format
+        $validated = $request->validate([
+            'file' => ['required', 'file', 'max:10240'],
             'section' => ['required', 'string', 'max:100'],
         ], [
             'file.max' => 'File must not exceed 10MB.',
         ]);
 
         $file = $request->file('file');
-
-        $originalName = $file->getClientOriginalName();
-        $filename = time() . '_' . $originalName;
+        $filename = $file->getClientOriginalName();
 
         $file->storeAs('forms', $filename);
 
         Form::create([
-            'title' => $request->title,
+            'title' => $filename,
             'file_name' => $filename,
-            'section' => $request->section,
+            'section' => $validated['section'],
             'department_id' => Auth::user()->department_id,
         ]);
 
         return redirect()->back()->with('success', 'File uploaded successfully.');
     }
 
+    public function download($id): StreamedResponse
+    {
+        $form = Form::findOrFail($id);
+
+        $path = 'forms/' . $form->file_name;
+
+        abort_if(!Storage::exists($path), 404, 'File not found.');
+
+        return Storage::download($path, $form->file_name);
+    }
 
     public function destroy($id): RedirectResponse
     {

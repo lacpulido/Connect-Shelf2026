@@ -361,7 +361,7 @@ usePoll(2000, {
 
                 <Breadcrumb>
                     <BreadcrumbList>
-                        <BreadcrumbItem>Submissions</BreadcrumbItem>
+                        <BreadcrumbItem>Submissions </BreadcrumbItem>
                     </BreadcrumbList>
                 </Breadcrumb>
             </header>

@@ -1,238 +1,108 @@
 <script setup lang="ts">
-import AppSidebar from '@/components/AppSidebar.vue'
-import AssignPanelist from '@/components/AssignPanelist.vue'
-import ProjectDetailsModal from '@/components/ProjectDetailsModal.vue'
-import SetDefenseSchedule from '@/components/SetDefenseSchedule.vue'
-import { Breadcrumb, BreadcrumbList, BreadcrumbItem as CrumbItem } from '@/components/ui/breadcrumb'
-import { Separator } from '@/components/ui/separator'
-import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
-import type { User } from '@/types/user'
-import { Head, usePage, usePoll } from '@inertiajs/vue3'
-import { computed, ref, watch } from 'vue'
+import AppSidebar from '@/components/AppSidebar.vue';
+import { Breadcrumb, BreadcrumbItem as CrumbItem, BreadcrumbList } from '@/components/ui/breadcrumb';
+import {
+    Empty,
+    EmptyContent,
+    EmptyDescription,
+    EmptyHeader,
+    EmptyMedia,
+    EmptyTitle,
+} from '@/components/ui/empty';
+import { Separator } from '@/components/ui/separator';
+import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
+import { Head, router } from '@inertiajs/vue3';
+import { FolderOpen } from 'lucide-vue-next';
 
 type Department = {
-    id: number
-    name: string
-}
+    name?: string | null;
+};
 
-type ModalFaculty = Omit<User, 'email' | 'roles'> & {
-    email: string
-    roles?: unknown[]
-}
+type Person = {
+    id?: number;
+    first_name?: string | null;
+    last_name?: string | null;
+    name?: string | null;
+    department?: Department | null;
+};
 
-type ProjectSchedule = {
-    id?: number
-    status?: string | null
-    is_confirmed?: boolean | number | null
-    confirmation_status?: string | null
-    reschedule_requested?: boolean | number | null
-    is_reschedule_requested?: boolean | number | null
-    request_reschedule?: boolean | number | null
-    reschedule_status?: string | null
-    defense_date?: string | null
-    defense_time?: string | null
-    venue?: string | null
-} | null
+type Adviser = {
+    id: number;
+    first_name: string;
+    last_name: string;
+};
+
+type Schedule = {
+    defense_date?: string | null;
+    defense_time?: string | null;
+    venue?: string | null;
+};
 
 type Project = {
-    id: number
-    title: string
-    description?: string
-    user?: User | null
-    researchers?: User[]
-    schedule?: ProjectSchedule
-    panelists?: ModalFaculty[]
-    status?: string
-    project_type?: string
-}
+    id: number;
+    slug: string;
+    title: string;
+    abstract?: string | null;
+    project_type?: string | null;
+    academic_year?: string | null;
+    semester?: string | null;
+    status?: string | null;
+    adviser?: Adviser | null;
+    schedule?: Schedule | null;
+    student?: Person | null;
+    creator?: Person | null;
+    user?: Person | null;
+    leader?: Person | null;
+};
 
-type Filters = Record<string, unknown>
+defineProps<{
+    projects: Project[];
+}>();
 
-const page = usePage()
+const goToManageProject = (project: Project) => {
+    router.visit(
+        route('focalperson.projects.manage', {
+            project: project.slug,
+        }),
+    );
+};
 
-const projects = ref<Project[]>([...((page.props.projects as Project[]) || [])])
+const getProjectOwner = (project: Project): Person | null => {
+    return project.leader ?? project.student ?? project.creator ?? project.user ?? null;
+};
 
-watch(
-    () => page.props.projects,
-    (newProjects) => {
-        projects.value = [...((newProjects as Project[]) || [])]
-    },
-    { deep: true },
-)
+const getFullName = (person: Person | null): string => {
+    if (!person) return 'No student assigned';
 
-const hasProjects = computed(() => projects.value.length > 0)
-const departments = computed<Department[]>(() => (page.props.departments as Department[]) || [])
-const filters = computed<Filters>(() => (page.props.filters as Filters) || {})
+    if (person.name) return person.name;
 
-const faculties = computed<ModalFaculty[]>(() => {
-    return (((page.props.faculties as User[]) || [])
-        .filter((faculty: any) => {
-            return !faculty.roles?.some((role: any) => role.name === 'Administrator')
-        })
-        .map((faculty: any) => ({
-            ...faculty,
-            email: faculty.email ?? '',
-            roles: faculty.roles,
-        }))) as ModalFaculty[]
-})
+    const fullName = `${person.first_name ?? ''} ${person.last_name ?? ''}`.trim();
 
-const showDetailsModal = ref(false)
-const showScheduleModal = ref(false)
-const showPanelistModal = ref(false)
-const selectedProject = ref<Project | null>(null)
-const pollingProjectId = ref<number | null>(null)
+    return fullName || 'No student assigned';
+};
 
-const { start: startPolling, stop: stopPolling } = usePoll(
-    1500,
-    {
-        only: ['projects'],
-        onFinish: () => {
-            if (!pollingProjectId.value) return
+const getInitials = (person: Person | null): string => {
+    const name = getFullName(person);
 
-            const updatedProject = projects.value.find((project) => project.id === pollingProjectId.value)
+    if (name === 'No student assigned') return 'NA';
 
-            if (updatedProject?.schedule) {
-                stopPolling()
-                pollingProjectId.value = null
-
-                if (selectedProject.value?.id === updatedProject.id) {
-                    selectedProject.value = updatedProject
-                }
-            }
-        },
-    },
-    { autoStart: false },
-)
-
-const openDetailsModal = (project: Project) => {
-    selectedProject.value = project
-    showDetailsModal.value = true
-}
-
-const openScheduleModal = (project: Project) => {
-    selectedProject.value = project
-    showScheduleModal.value = true
-}
-
-const openPanelistModal = (project: Project) => {
-    selectedProject.value = project
-    showPanelistModal.value = true
-}
-
-const handlePanelistAdded = (faculty: ModalFaculty) => {
-    if (!selectedProject.value) return
-
-    const index = projects.value.findIndex((project) => project.id === selectedProject.value?.id)
-    if (index === -1) return
-
-    const existingPanelists = projects.value[index].panelists || []
-    const alreadyExists = existingPanelists.some((panelist) => panelist.id === faculty.id)
-
-    if (!alreadyExists) {
-        projects.value[index] = {
-            ...projects.value[index],
-            panelists: [...existingPanelists, faculty],
-        }
-
-        selectedProject.value = projects.value[index]
-
-        if ((projects.value[index].panelists?.length || 0) >= 3) {
-            showPanelistModal.value = false
-        }
-    }
-}
-
-const handleScheduleSaved = (projectId: number) => {
-    pollingProjectId.value = projectId
-    startPolling()
-}
-
-const getDisplayStatus = (status?: string) => status || 'Ongoing'
-
-const isScheduleConfirmed = (project: Project) => {
-    const schedule = project.schedule
-    if (!schedule) return false
-
-    const normalizedStatus = String(schedule.status || schedule.confirmation_status || '')
-        .toLowerCase()
-        .trim()
-
-    return schedule.is_confirmed === true || schedule.is_confirmed === 1 || normalizedStatus === 'confirmed'
-}
-
-const getPanelistCount = (project: Project) => Array.isArray(project.panelists) ? project.panelists.length : 0
-const hasReachedMaxPanelists = (project: Project) => getPanelistCount(project) >= 3
-const arePanelistsConfirmed = (project: Project) => getPanelistCount(project) >= 3
-const canViewDetails = (project: Project) => isScheduleConfirmed(project) && arePanelistsConfirmed(project)
-const hasSchedule = (project: Project) => !!project.schedule
-
-const hasRescheduleRequest = (project: Project) => {
-    const schedule = project.schedule
-    if (!schedule) return false
-
-    const statuses = [schedule.status, schedule.confirmation_status, schedule.reschedule_status]
+    return name
+        .split(' ')
         .filter(Boolean)
-        .map((value) => String(value).toLowerCase().trim())
+        .slice(0, 2)
+        .map((word) => word.charAt(0).toUpperCase())
+        .join('');
+};
 
-    return (
-        schedule.reschedule_requested === true ||
-        schedule.reschedule_requested === 1 ||
-        schedule.is_reschedule_requested === true ||
-        schedule.is_reschedule_requested === 1 ||
-        schedule.request_reschedule === true ||
-        schedule.request_reschedule === 1 ||
-        statuses.includes('reschedule_requested') ||
-        statuses.includes('for_reschedule') ||
-        statuses.includes('requested_reschedule') ||
-        statuses.includes('reschedule')
-    )
-}
+const getDepartment = (person: Person | null): string => {
+    return person?.department?.name ?? 'No department';
+};
 
-const isScheduleSubmitted = (project: Project) => hasSchedule(project) && !hasRescheduleRequest(project)
+const getAdviserName = (project: Project): string => {
+    if (!project.adviser) return 'N/A';
 
-const shouldShowScheduleButton = (project: Project) =>
-    !hasSchedule(project) || hasRescheduleRequest(project) || isScheduleSubmitted(project)
-
-const getScheduleButtonLabel = (project: Project) => {
-    if (hasRescheduleRequest(project)) return 'Reschedule'
-    if (isScheduleSubmitted(project)) return 'Schedule Submitted'
-    return 'Set Schedule'
-}
-
-const isScheduleButtonDisabled = (project: Project) =>
-    isScheduleSubmitted(project) && !hasRescheduleRequest(project)
-
-const shouldShowAssignPanelistButton = (project: Project) => !hasReachedMaxPanelists(project)
-
-const getFullName = (user?: User | null) => {
-    if (!user) return 'Not assigned'
-    return `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim() || 'Not assigned'
-}
-
-const getInitials = (user?: User | null) => {
-    if (!user) return 'NA'
-    return `${user.first_name?.[0] ?? ''}${user.last_name?.[0] ?? ''}`.trim().toUpperCase() || 'NA'
-}
-
-const getProjectTypeLabel = (project: Project) => project.project_type || 'Project'
-
-const baseButtonClass =
-    'inline-flex h-10 w-full items-center justify-center rounded-lg px-2.5 py-2 text-[13px] font-medium transition hover:opacity-90 focus:outline-none focus:ring-2'
-
-const primaryButtonClass =
-    `${baseButtonClass} bg-[#0C4B05] text-white focus:ring-[#0C4B05]/30`
-
-const secondaryButtonClass =
-    `${baseButtonClass} border border-gray-300 bg-white text-gray-700 focus:ring-gray-300`
-
-const submittedButtonClass =
-    'col-span-2 flex h-11 w-full cursor-not-allowed items-center justify-center rounded-md border border-gray-300 bg-white px-4 text-sm font-medium text-gray-700 opacity-90 focus:ring-gray-300'
-const getScheduleButtonClass = (project: Project) =>
-    hasRescheduleRequest(project)
-        ? `${baseButtonClass} border border-amber-400 bg-amber-50 text-amber-700 focus:ring-amber-200`
-        : isScheduleSubmitted(project)
-          ? submittedButtonClass
-          : primaryButtonClass
+    return `${project.adviser.first_name} ${project.adviser.last_name}`.trim();
+};
 </script>
 
 <template>
@@ -253,188 +123,107 @@ const getScheduleButtonClass = (project: Project) =>
                 </Breadcrumb>
             </header>
 
-            <div class="space-y-5 p-6">
+            <main class="space-y-5 p-6">
                 <div class="rounded-xl border border-gray-200 bg-white px-6 py-5 shadow-sm">
                     <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                         <div>
                             <h1 class="text-2xl font-bold text-gray-900">Projects</h1>
                             <p class="mt-1 text-sm text-gray-500">
-                                Manage, review, and schedule all submitted projects.
+                                Manage panelists and defense schedules for each project.
                             </p>
                         </div>
                     </div>
                 </div>
 
-                <div v-if="hasProjects" class="grid grid-cols-1 gap-5 xl:grid-cols-3">
+                <div v-if="!projects.length" class="flex min-h-[60vh] items-center justify-center">
+                    <Empty class="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-sm">
+                        <EmptyHeader>
+                            <EmptyMedia variant="icon">
+                                <FolderOpen />
+                            </EmptyMedia>
+                        </EmptyHeader>
+
+                        <EmptyTitle>No Projects Found</EmptyTitle>
+                        <EmptyDescription>Projects will appear here once available.</EmptyDescription>
+                        <EmptyContent />
+                    </Empty>
+                </div>
+
+                <div v-else class="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
                     <div
                         v-for="project in projects"
                         :key="project.id"
-                        class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-md"
+                        class="flex h-full flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-md"
                     >
-                        <div class="border-b border-gray-100 bg-gradient-to-r from-[#0C4B05] to-[#146b0c] px-5 py-4">
+                        <div class="min-h-[128px] border-b border-gray-100 bg-gradient-to-r from-[#0C4B05] to-[#146b0c] px-5 py-4">
                             <div class="flex items-start justify-between gap-3">
                                 <div class="min-w-0">
-                                    <p class="mb-1 text-xs font-semibold uppercase tracking-wider text-white/80">
-                                        {{ getProjectTypeLabel(project) }}
+                                    <p class="mb-2 text-xs font-semibold uppercase tracking-wider text-white/80">
+                                        {{ project.project_type ?? 'No project type' }}
                                     </p>
-                                    <h2 class="line-clamp-2 text-lg font-bold leading-snug text-white">
+
+                                    <h2 class="line-clamp-3 text-lg font-bold leading-snug text-white">
                                         {{ project.title }}
                                     </h2>
                                 </div>
 
-                                <span
-                                    :class="[
-                                        'inline-flex shrink-0 rounded-full px-3 py-1 text-xs font-semibold',
-                                        project.status?.toLowerCase() === 'completed'
-                                            ? 'border border-white/20 bg-white/20 text-white'
-                                            : project.status?.toLowerCase() === 'pending'
-                                              ? 'border border-yellow-200 bg-yellow-100 text-yellow-800'
-                                              : project.status?.toLowerCase() === 'scheduled'
-                                                ? 'border border-blue-200 bg-blue-100 text-blue-700'
-                                                : project.status?.toLowerCase() === 'cancelled'
-                                                  ? 'border border-red-200 bg-red-100 text-red-700'
-                                                  : 'border border-white/15 bg-white/15 text-white',
-                                    ]"
-                                >
-                                    {{ getDisplayStatus(project.status) }}
+                                <span class="shrink-0 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold capitalize text-white">
+                                    {{ project.status ?? 'Pending' }}
                                 </span>
                             </div>
                         </div>
 
-                        <div class="p-5">
-                            <div class="mb-5 border-t border-gray-100 pt-4">
-                                <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Leader</p>
+                        <div class="flex flex-1 flex-col p-5">
+                            <div>
+                                <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                                    Project Leader 
+                                </p>
 
                                 <div class="mt-3 flex items-center gap-3">
                                     <div
                                         class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#0C4B05]/10 text-sm font-bold uppercase text-[#0C4B05]"
                                     >
-                                        {{ getInitials(project.user) }}
+                                        {{ getInitials(getProjectOwner(project)) }}
                                     </div>
 
                                     <div class="min-w-0">
                                         <p class="truncate text-base font-semibold text-gray-900">
-                                            {{ getFullName(project.user) }}
+                                            {{ getFullName(getProjectOwner(project)) }}
                                         </p>
-                                        <p class="truncate text-sm text-gray-500">Leader</p>
+                                        <p class="truncate text-sm text-gray-500">
+                                            {{ getDepartment(getProjectOwner(project)) }}
+                                        </p>
                                     </div>
                                 </div>
                             </div>
 
-                            <div
-                                v-if="project.status?.toLowerCase() !== 'completed'"
-                                class="border-t border-gray-100 pt-4"
-                            >
-                                <div class="space-y-3">
-                                    <div
-                                        v-if="shouldShowScheduleButton(project) || shouldShowAssignPanelistButton(project)"
-                                        :class="[
-                                            'grid gap-2.5',
-                                            shouldShowScheduleButton(project) && shouldShowAssignPanelistButton(project)
-                                                ? 'grid-cols-2'
-                                                : 'grid-cols-1',
-                                        ]"
-                                    >
-                                        <button
-                                            v-if="shouldShowScheduleButton(project)"
-                                            type="button"
-                                            @click="!isScheduleButtonDisabled(project) && openScheduleModal(project)"
-                                            :disabled="isScheduleButtonDisabled(project)"
-                                            :class="getScheduleButtonClass(project)"
-                                        >
-                                            {{ getScheduleButtonLabel(project) }}
-                                        </button>
+                            <div class="mt-5 space-y-2 border-t border-gray-100 pt-4 text-sm text-gray-600">
+                                <p>
+                                    <span class="font-semibold text-gray-800">Semester:</span>
+                                    {{ project.semester ?? 'N/A' }}
+                                </p>
 
-                                        <button
-                                            v-if="shouldShowAssignPanelistButton(project)"
-                                            type="button"
-                                            @click="openPanelistModal(project)"
-                                            :class="secondaryButtonClass"
-                                        >
-                                            Assign Panelist
-                                        </button>
-                                    </div>
-
-                                    <button
-                                        v-if="canViewDetails(project)"
-                                        type="button"
-                                        @click="openDetailsModal(project)"
-                                        :class="secondaryButtonClass"
-                                    >
-                                        View Details
-                                    </button>
-                                </div>
+                                <p>
+                                    <span class="font-semibold text-gray-800">Adviser:</span>
+                                    {{ getAdviserName(project) }}
+                                </p>
                             </div>
 
-                            <div v-else class="border-t border-gray-100 pt-4">
-                                <div
-                                    :class="secondaryButtonClass + ' w-full cursor-not-allowed text-center opacity-70'"
-                                >
-                                    This project is already completed.
-                                </div>
+                            <div class="mt-auto pt-6">
+                              <div class="flex items-center justify-end border-t border-gray-100 pt-4">
+    <button
+        type="button"
+        @click="goToManageProject(project)"
+        class="inline-flex min-w-[140px] items-center justify-center rounded-md bg-[#0C4B05] px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90"
+    >
+        Manage Project
+    </button>
+</div>
                             </div>
                         </div>
                     </div>
                 </div>
-
-                <div v-else class="flex min-h-[60vh] items-center justify-center">
-                    <div class="w-full max-w-md rounded-2xl border border-gray-200 bg-white px-8 py-12 text-center shadow-sm">
-                        <div
-                            class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#0C4B05]/10 text-[#0C4B05]"
-                        >
-                            <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                class="h-8 w-8"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                                stroke-width="1.8"
-                            >
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    d="M3 7.5A2.5 2.5 0 015.5 5h13A2.5 2.5 0 0121 7.5v9A2.5 2.5 0 0118.5 19h-13A2.5 2.5 0 013 16.5v-9z"
-                                />
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    d="M8 10h8M8 14h5"
-                                />
-                            </svg>
-                        </div>
-
-                        <h2 class="text-xl font-semibold text-gray-900">No Projects Yet</h2>
-                        <p class="mt-2 text-sm text-gray-500">
-                            There are no submitted projects at the moment.
-                        </p>
-                    </div>
-                </div>
-            </div>
+            </main>
         </SidebarInset>
     </SidebarProvider>
-
-    <ProjectDetailsModal
-        :show="showDetailsModal"
-        :project="selectedProject"
-        :faculties="faculties"
-        @close="showDetailsModal = false"
-    />
-
-    <AssignPanelist
-        v-if="selectedProject"
-        :show="showPanelistModal"
-        :project="selectedProject"
-        :faculties="faculties"
-        :departments="departments"
-        :filters="filters"
-        @added="handlePanelistAdded"
-        @close="showPanelistModal = false"
-    />
-
-    <SetDefenseSchedule
-        :show="showScheduleModal"
-        :project="selectedProject"
-        @saved="handleScheduleSaved"
-        @close="showScheduleModal = false"
-    />
 </template>

@@ -348,7 +348,7 @@ usePoll(5000, {
                         </div>
                         <h4 class="mt-3 text-sm font-semibold text-[#0C4B05]">No notifications yet</h4>
                         <p class="mt-1 max-w-[220px] text-xs leading-5 text-gray-500">
-                            New alerts and updates will appear here once available.
+                            New updates will appear here once available.
                         </p>
                     </div>
                 </div>
@@ -431,16 +431,7 @@ usePoll(5000, {
                         Close
                     </button>
 
-                    <button
-                        type="button"
-                        @click="
-                            closeModal();
-                            router.get(route('focalperson.projects'));
-                        "
-                        class="rounded-lg bg-[#0C4B05] px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
-                    >
-                        Go to Projects
-                    </button>
+                  
                 </div>
             </div>
         </div>

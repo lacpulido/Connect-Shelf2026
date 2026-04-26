@@ -10,9 +10,9 @@ use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 
 class ScheduleActionController extends Controller
@@ -29,10 +29,12 @@ class ScheduleActionController extends Controller
 
         DB::transaction(function () use ($schedule) {
             $schedule->update([
-                'is_confirmed'         => true,
-                'status'               => 'confirmed',
+                'is_confirmed' => true,
+                'status' => 'confirmed',
                 'reschedule_requested' => false,
-                'reschedule_reason'    => null,
+                'requested_defense_date' => null,
+                'requested_defense_time' => null,
+                'reschedule_reason' => null,
             ]);
 
             $actorName = $this->facultyName();
@@ -43,7 +45,7 @@ class ScheduleActionController extends Controller
                 $schedule->venue
             );
 
-            $this->sendNotifications(
+            $this->sendProjectNotifications(
                 schedule: $schedule,
                 title: 'Schedule Confirmed by ' . $actorName,
                 message: $actorName . ' confirmed the defense schedule for project "' .
@@ -66,27 +68,41 @@ class ScheduleActionController extends Controller
 
         DB::transaction(function () use ($schedule, $validated) {
             $schedule->update([
-                'defense_date'         => $validated['preferred_date'],
-                'defense_time'         => $validated['preferred_time'],
+                'requested_defense_date' => $validated['preferred_date'],
+                'requested_defense_time' => $validated['preferred_time'],
                 'reschedule_requested' => true,
-                'is_confirmed'         => false,
-                'status'               => 'reschedule_requested',
-                'reschedule_reason'    => null,
+                'is_confirmed' => false,
+                'status' => 'reschedule_requested',
+                'reschedule_reason' => null,
             ]);
 
             $actorName = $this->facultyName();
 
-            $scheduleText = $this->formatScheduleText(
+            $requestedDate = Carbon::parse($validated['preferred_date'])->format('F d, Y');
+
+            $requestedScheduleText = $this->formatScheduleText(
                 $validated['preferred_date'],
                 $validated['preferred_time'],
                 $schedule->venue
             );
 
-            $this->sendNotifications(
+            $projectTitle = $schedule->project->title ?? 'Untitled';
+
+            $this->sendFocalPersonNotifications(
+                schedule: $schedule,
+                title: 'Reschedule Date Requested',
+                message: $actorName . ' requested to reschedule the defense for project "' .
+                    $projectTitle . '". Requested date: ' . $requestedDate .
+                    '. Requested time: ' . $validated['preferred_time'] .
+                    '. Requested schedule: ' . $requestedScheduleText . '.',
+                type: 'reschedule_request',
+            );
+
+            $this->sendProjectNotifications(
                 schedule: $schedule,
                 title: 'Reschedule Requested by ' . $actorName,
                 message: $actorName . ' requested a reschedule for project "' .
-                    ($schedule->project->title ?? 'Untitled') . '" — preferred: ' . $scheduleText . '.',
+                    $projectTitle . '" — preferred: ' . $requestedScheduleText . '.',
                 type: 'reschedule_request',
             );
         });
@@ -109,7 +125,9 @@ class ScheduleActionController extends Controller
         $allowed = $schedule->project()
             ->where(function ($query) use ($facultyId) {
                 $query->where('adviser_id', $facultyId)
-                    ->orWhereHas('panelists', fn ($q) => $q->where('users.id', $facultyId));
+                    ->orWhereHas('panelists', function ($q) use ($facultyId) {
+                        $q->where('users.id', $facultyId);
+                    });
             })
             ->exists();
 
@@ -118,11 +136,38 @@ class ScheduleActionController extends Controller
         return $schedule;
     }
 
-    private function sendNotifications(Schedule $schedule, string $title, string $message, string $type): void
-    {
+    private function sendFocalPersonNotifications(
+        Schedule $schedule,
+        string $title,
+        string $message,
+        string $type
+    ): void {
+        $focalPersonIds = User::whereHas('roles', function ($q) {
+            $q->where('name', 'Focal Person');
+        })->pluck('id');
+
+        foreach ($focalPersonIds as $userId) {
+            Notification::create([
+                'user_id' => $userId,
+                'title' => $title,
+                'message' => $message,
+                'type' => $type,
+                'reference_id' => $schedule->id,
+                'reference_type' => 'schedule',
+                'status' => 'UNREAD',
+            ]);
+        }
+    }
+
+    private function sendProjectNotifications(
+        Schedule $schedule,
+        string $title,
+        string $message,
+        string $type
+    ): void {
         $project = $schedule->project;
 
-        if (! $project) {
+        if (!$project) {
             return;
         }
 
@@ -130,13 +175,13 @@ class ScheduleActionController extends Controller
 
         foreach ($recipientIds as $userId) {
             Notification::create([
-                'user_id'        => $userId,
-                'title'          => $title,
-                'message'        => $message,
-                'type'           => $type,
-                'reference_id'   => $schedule->id,
+                'user_id' => $userId,
+                'title' => $title,
+                'message' => $message,
+                'type' => $type,
+                'reference_id' => $schedule->id,
                 'reference_type' => 'schedule',
-                'status'         => 'UNREAD',
+                'status' => 'UNREAD',
             ]);
         }
     }
@@ -145,23 +190,21 @@ class ScheduleActionController extends Controller
     {
         $currentUserId = Auth::id();
 
-        $focalPersonIds = User::whereHas('roles', fn ($q) => $q->where('name', 'Focal Person'))
-            ->pluck('id');
-
         return collect()
-            ->merge($focalPersonIds)
             ->push($project->adviser_id)
             ->push($project->user_id)
-            ->merge($project->researchers->pluck('id'))
-            ->merge($project->panelists->pluck('id'))
-            ->filter(fn ($id) => ! is_null($id) && (int) $id !== (int) $currentUserId)
+            ->merge($project->researchers?->pluck('id') ?? collect())
+            ->merge($project->panelists?->pluck('id') ?? collect())
+            ->filter(fn ($id) => !is_null($id) && (int) $id !== (int) $currentUserId)
             ->unique()
             ->values();
     }
 
     private function formatScheduleText(?string $date, ?string $time, ?string $venue): string
     {
-        $formattedDate = $date ? Carbon::parse($date)->format('F d, Y') : 'TBA';
+        $formattedDate = $date
+            ? Carbon::parse($date)->format('F d, Y')
+            : 'TBA';
 
         return "{$formattedDate} | " . ($time ?? 'TBA') . " | " . ($venue ?? 'TBA');
     }
@@ -170,34 +213,20 @@ class ScheduleActionController extends Controller
     {
         $user = Auth::user();
 
-        if (! $user) {
+        if (!$user) {
             return 'A faculty member';
         }
 
-        if (! empty($user->name) && trim($user->name) !== '') {
-            return trim($user->name);
+        $name = trim((string) ($user->name ?? ''));
+
+        if ($name !== '') {
+            return $name;
         }
 
         $firstName = trim((string) ($user->first_name ?? ''));
         $lastName = trim((string) ($user->last_name ?? ''));
         $fullName = trim($firstName . ' ' . $lastName);
 
-        if ($fullName !== '') {
-            return $fullName;
-        }
-
-        $fNameAlt = trim((string) ($user->fname ?? ''));
-        $lNameAlt = trim((string) ($user->lname ?? ''));
-        $fullNameAlt = trim($fNameAlt . ' ' . $lNameAlt);
-
-        if ($fullNameAlt !== '') {
-            return $fullNameAlt;
-        }
-
-        if (! empty($user->email) && trim($user->email) !== '') {
-            return trim($user->email);
-        }
-
-        return 'A faculty member';
+        return $fullName !== '' ? $fullName : ($user->email ?? 'A faculty member');
     }
 }

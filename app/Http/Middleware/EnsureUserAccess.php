@@ -11,19 +11,36 @@ class EnsureUserAccess
 {
     public function handle(Request $request, Closure $next, ...$allowed): Response
     {
+        // ❗ Check if logged in
         if (!Auth::check()) {
             return redirect()->route('login');
         }
 
         $user = Auth::user();
 
+        // 🔥 FORCE LOGOUT kapag inactive
+        if ((int) $user->is_active === 0 || $user->status === 'Inactive') {
+            Auth::logout();
+
+            // Important: clear session
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()->route('login')->withErrors([
+                'email' => 'Your account has been deactivated.',
+            ]);
+        }
+
+        // ❗ Role checking (existing logic)
         foreach ($allowed as $rule) {
             if ($this->hasAccess($user, $rule)) {
                 return $next($request);
             }
         }
+
         return $this->redirectUnauthorizedUser($user);
     }
+
     private function hasAccess($user, string $rule): bool
     {
         return match ($rule) {
@@ -33,6 +50,7 @@ class EnsureUserAccess
                 && $user->roles()->where('name', $rule)->exists(),
         };
     }
+
     private function redirectUnauthorizedUser($user): Response
     {
         return match ((int) $user->user_type) {
