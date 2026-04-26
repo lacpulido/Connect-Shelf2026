@@ -9,3 +9,4 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('app:auto-soft-delete-students')->everyMinute();
+Schedule::command('app:auto-soft-delete-projects')->everyMinute();
