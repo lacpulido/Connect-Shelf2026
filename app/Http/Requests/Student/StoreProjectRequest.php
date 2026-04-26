@@ -105,7 +105,7 @@ class StoreProjectRequest extends FormRequest
             'title.max' => 'Project title cannot exceed 200 characters.',
 
             'academic_year.required' => 'Academic year is required.',
-            'academic_year.regex' => 'Academic year must use this format: 2025-2026.',
+            'academic_year.regex' => 'Academic year must use this format: 2024-2025.',
 
             'researchers.array' => 'Researchers must be a valid list.',
             'researchers.max' => 'You can only add up to 4 researchers.',
