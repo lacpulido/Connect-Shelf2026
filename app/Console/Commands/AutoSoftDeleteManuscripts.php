@@ -13,7 +13,7 @@ class AutoSoftDeleteManuscripts extends Command
 
     public function handle(): int
     {
-        $cutoff = Carbon::now('Asia/Manila')->subMinute();
+        $cutoff = Carbon::now('Asia/Manila')->subMonth();
 
         $this->info('Cutoff (1 month ago): ' . $cutoff->toDateTimeString());
 
