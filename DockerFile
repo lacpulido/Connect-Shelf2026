@@ -50,4 +50,4 @@ RUN composer dump-autoload --optimize \
 EXPOSE 8000
 
 CMD php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=${PORT:-8000}
-COPY uploads.ini /usr/local/etc/php/conf.d/uploads.ini
+COPY docker/php/uploads.ini /usr/local/etc/php/conf.d/uploads.ini
