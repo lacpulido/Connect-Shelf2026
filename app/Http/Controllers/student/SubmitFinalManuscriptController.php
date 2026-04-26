@@ -80,7 +80,7 @@ class SubmitFinalManuscriptController extends Controller
             $validated = $request->validate([
                 'title' => ['required', 'string', 'max:255'],
                 'abstract' => ['required', 'string'],
-                'manuscript' => ['required', 'file', 'mimes:pdf', 'max:10240'],
+                'manuscript' => ['required', 'file', 'mimes:pdf', 'max:15360'],
             ]);
 
             $project = $this->getStudentProject($user->id);
