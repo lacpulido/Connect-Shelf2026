@@ -16,7 +16,7 @@ class AutoSoftDeleteProjects extends Command
         // Adjust days if needed (example: 1 day after completion)
         $projects = Project::where('status', 'Completed')
             ->whereNotNull('completed_at')
-            ->where('completed_at', '<=', Carbon::now()->subDays(1))
+            ->where('completed_at', '<=', Carbon::now()->subMinute())
             ->get();
 
         if ($projects->isEmpty()) {
