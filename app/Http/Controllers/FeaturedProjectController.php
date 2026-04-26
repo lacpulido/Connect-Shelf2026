@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Project;
 use App\Models\ProjectManuscript;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -17,7 +16,8 @@ class FeaturedProjectController extends Controller
                 'project.user',
                 'project.department',
             ])
-            ->whereHas('project')
+            ->where('status', 'approved') // ✅ ONLY APPROVED MANUSCRIPTS
+            ->whereHas('project') // ensure may project
             ->inRandomOrder()
             ->limit(3)
             ->get()

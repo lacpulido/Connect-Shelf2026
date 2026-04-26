@@ -18,17 +18,12 @@ import {
     Upload,
     Users,
 } from 'lucide-vue-next';
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 type ExtendedUser = {
     user_type?: number | string | null;
     is_dept_chair?: boolean;
     is_focal_person?: boolean;
-};
-
-type RememberedSidebarState = {
-    sidebarOpen: boolean;
-    othersOpen: boolean;
 };
 
 type SidebarNavItem = BaseNavItem & {
@@ -49,13 +44,23 @@ const showOthersSidebar = computed<boolean>(() => {
     return userType.value === 1 && (isDeptChair.value || isFocalPerson.value);
 });
 
-const rememberedState = useRemember<RememberedSidebarState>(
+const rememberedState = useRemember(
     {
         sidebarOpen: true,
         othersOpen: true,
     },
     'sidebar-state',
 );
+
+const othersOpen = ref<boolean>(rememberedState.othersOpen ?? true);
+
+watch(othersOpen, (value) => {
+    rememberedState.othersOpen = value;
+});
+
+const toggleOthers = (): void => {
+    othersOpen.value = !othersOpen.value;
+};
 
 const footerNavItems = computed<SidebarNavItem[]>(() => []);
 
@@ -114,8 +119,8 @@ const mainNavItems = computed<SidebarNavItem[]>(() => {
     ];
 });
 
-const othersNavItems = computed<SidebarNavItem[] | null>(() => {
-    if (!showOthersSidebar.value) return null;
+const othersNavItems = computed<SidebarNavItem[]>(() => {
+    if (!showOthersSidebar.value) return [];
 
     const items: SidebarNavItem[] = [];
 
@@ -149,12 +154,10 @@ const othersNavItems = computed<SidebarNavItem[] | null>(() => {
         );
     }
 
-    return items.length ? items : null;
+    return items;
 });
 
-const toggleOthers = (): void => {
-    rememberedState.othersOpen = !rememberedState.othersOpen;
-};
+const hasOthersNavItems = computed<boolean>(() => othersNavItems.value.length > 0);
 
 const normalizeUrl = (url: string): string => {
     try {
@@ -194,17 +197,11 @@ const isActive = (item: SidebarNavItem): boolean => {
                     :href="item.href"
                     preserve-scroll
                     preserve-state
-                    class="group relative flex h-12 items-center rounded-xl px-4 transition-all duration-200 group-data-[state=collapsed]:justify-center group-data-[state=collapsed]:px-0"
+                    class="group relative flex h-12 items-center rounded-xl px-4 transition-all duration-200 hover:bg-gray-100 group-data-[state=collapsed]:justify-center group-data-[state=collapsed]:px-0"
                     :class="{
-                        'bg-gray-200 group-data-[state=collapsed]:bg-transparent': isActive(item),
-                        'hover:bg-gray-100 group-data-[state=collapsed]:hover:bg-transparent': !isActive(item),
+                        'bg-gray-200': isActive(item),
                     }"
                 >
-                    <div
-                        v-if="isActive(item)"
-                        class="absolute left-0 hidden h-6 w-1 rounded-r bg-gray-400 group-data-[state=collapsed]:block"
-                    />
-
                     <component
                         :is="item.icon"
                         class="h-5 w-5 shrink-0"
@@ -217,19 +214,28 @@ const isActive = (item: SidebarNavItem): boolean => {
                 </Link>
             </div>
 
-            <div v-if="othersNavItems" class="pt-0">
+            <div v-if="hasOthersNavItems" class="space-y-1">
                 <button
                     type="button"
+                    class="group relative z-10 flex h-12 w-full cursor-pointer items-center justify-between rounded-xl bg-transparent px-4 text-left transition-all duration-200 hover:bg-gray-100 group-data-[state=collapsed]:justify-center group-data-[state=collapsed]:px-0"
                     @click="toggleOthers"
-                    class="group relative flex h-12 w-full cursor-pointer items-center justify-between rounded-xl bg-gray-100 px-4 text-left transition-all duration-200 hover:bg-gray-200 active:scale-[0.98] group-data-[state=collapsed]:justify-center group-data-[state=collapsed]:px-0 group-data-[state=collapsed]:bg-transparent group-data-[state=collapsed]:hover:bg-transparent"
-                    :aria-expanded="rememberedState.othersOpen"
                 >
+                    <ChevronUp
+                        v-if="othersOpen"
+                        class="h-5 w-5 shrink-0 text-gray-600 group-data-[state=expanded]:hidden"
+                    />
+
+                    <ChevronDown
+                        v-else
+                        class="h-5 w-5 shrink-0 text-gray-600 group-data-[state=expanded]:hidden"
+                    />
+
                     <span class="whitespace-nowrap text-sm font-semibold text-gray-700 group-data-[state=collapsed]:hidden">
                         Others
                     </span>
 
                     <ChevronUp
-                        v-if="rememberedState.othersOpen"
+                        v-if="othersOpen"
                         class="h-4 w-4 shrink-0 text-gray-600 group-data-[state=collapsed]:hidden"
                     />
 
@@ -239,17 +245,16 @@ const isActive = (item: SidebarNavItem): boolean => {
                     />
                 </button>
 
-                <div v-if="rememberedState.othersOpen" class="mt-0.5 space-y-1">
+                <div v-if="othersOpen" class="space-y-1">
                     <Link
                         v-for="item in othersNavItems"
                         :key="item.title"
                         :href="item.href"
                         preserve-scroll
                         preserve-state
-                        class="group relative flex h-11 items-center rounded-xl px-4 transition hover:bg-gray-100 group-data-[state=collapsed]:justify-center group-data-[state=collapsed]:px-0"
+                        class="group relative flex h-11 items-center rounded-xl px-4 transition-all duration-200 hover:bg-gray-100 group-data-[state=collapsed]:justify-center group-data-[state=collapsed]:px-0"
                         :class="{
-                            'bg-gray-200 group-data-[state=collapsed]:bg-transparent': isActive(item),
-                            'hover:bg-gray-100 group-data-[state=collapsed]:hover:bg-transparent': !isActive(item),
+                            'bg-gray-200': isActive(item),
                         }"
                     >
                         <component
