@@ -1,166 +1,142 @@
 <script setup lang="ts">
-import AppSidebar from '@/components/AppSidebar.vue';
-import { Breadcrumb, BreadcrumbItem, BreadcrumbList } from '@/components/ui/breadcrumb';
-import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
-import { Separator } from '@/components/ui/separator';
-import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
-import { useAlerts } from '@/composables/useAlerts';
-import { Project } from '@/types/project';
-import type { PageProps as InertiaPageProps } from '@inertiajs/core';
-import { Head, useForm, usePage } from '@inertiajs/vue3';
-import { CheckCircle2, Clock3, FileText, LoaderCircle, LockKeyhole, UploadCloud } from 'lucide-vue-next';
-import { computed, ref, watch } from 'vue';
+import AppSidebar from '@/components/AppSidebar.vue'
+import { Breadcrumb, BreadcrumbItem, BreadcrumbList } from '@/components/ui/breadcrumb'
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
+import { Separator } from '@/components/ui/separator'
+import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
+import { useAlerts } from '@/composables/useAlerts'
+import { Project } from '@/types/project'
+import type { PageProps as InertiaPageProps } from '@inertiajs/core'
+import { Head, useForm, usePage } from '@inertiajs/vue3'
+import { CheckCircle2, Clock3, FileText, LoaderCircle, LockKeyhole, UploadCloud } from 'lucide-vue-next'
+import { computed, ref, watch } from 'vue'
 
 interface PageProps extends InertiaPageProps {
     flash: {
-        success?: string;
-        error?: string;
-    };
+        success?: string
+        error?: string
+    }
 }
 
 const props = defineProps<{
-    project: Project | null;
-    manuscriptSubmitted: boolean;
-    manuscriptStatus: string | null;
-    manuscriptFileName: string | null;
-    canSubmitFinalManuscript: boolean;
-    approvedManuscriptDocument: {
-        id: number;
-        title: string;
-        filename: string;
-        status: string;
-    } | null;
-}>();
+    project: Project | null
+    manuscriptSubmitted: boolean
+    manuscriptStatus: string | null
+    manuscriptFileName: string | null
+    canSubmitFinalManuscript: boolean
+}>()
 
-const page = usePage<PageProps>();
-const flashSuccess = computed(() => page.props.flash?.success || '');
+const page = usePage<PageProps>()
+const flashSuccess = computed(() => page.props.flash?.success || '')
 
-const { showSuccessAlert, showErrorAlert } = useAlerts();
+const { showSuccessAlert, showErrorAlert } = useAlerts()
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+// ✅ FILE LIMIT
+const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 
 const form = useForm({
     title: props.project?.title ?? '',
     abstract: '',
     manuscript: null as File | null,
-});
+})
 
-const abstractError = ref('');
-const fileError = ref('');
-const isSaving = ref(false);
+const abstractError = ref('')
+const fileError = ref('')
+const isSaving = ref(false)
 
+// sync title
 watch(
     () => props.project,
-    (newProject) => {
-        form.title = newProject?.title ?? '';
+    (val) => {
+        form.title = val?.title ?? ''
     },
-    { immediate: true },
-);
+    { immediate: true }
+)
 
-watch(
-    flashSuccess,
-    (value) => {
-        if (value) {
-            showSuccessAlert('Submitted Successfully', value);
-        }
-    },
-    { immediate: true },
-);
+// success alert
+watch(flashSuccess, (val) => {
+    if (val) showSuccessAlert('Submitted Successfully', val)
+})
 
+// ✅ FILE HANDLER
 function handleFileChange(event: Event) {
-    const input = event.target as HTMLInputElement;
+    const input = event.target as HTMLInputElement
 
-    fileError.value = '';
-    form.manuscript = null;
+    fileError.value = ''
+    form.manuscript = null
 
-    if (!input.files?.length) return;
+    if (!input.files?.length) return
 
-    const file = input.files[0];
+    const file = input.files[0]
 
     if (file.size > MAX_FILE_SIZE) {
-        fileError.value = 'File is too large. Maximum size is 10MB.';
-        input.value = '';
-        return;
+        fileError.value = 'File is too large. Maximum size is 10MB.'
+        input.value = ''
+        return
     }
 
-    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
-        fileError.value = 'Only PDF files are allowed.';
-        input.value = '';
-        return;
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+        fileError.value = 'Only PDF files are allowed.'
+        input.value = ''
+        return
     }
 
-    form.manuscript = file;
+    form.manuscript = file
 }
 
-function cleanFileName(name: string | null): string {
-    if (!name) return '';
-    return name.replace(/^\d+_/, '');
+// clean filename
+function cleanFileName(name: string | null) {
+    if (!name) return ''
+    return name.replace(/^\d+_/, '')
 }
 
+// submit
 function submit() {
-    abstractError.value = '';
-    fileError.value = '';
+    abstractError.value = ''
+    fileError.value = ''
 
     if (!props.canSubmitFinalManuscript) {
-        showErrorAlert('Not Allowed', 'Your Manuscript document must be approved by your adviser first before submitting the final manuscript.');
-        return;
+        showErrorAlert('Not Allowed', 'Your manuscript must be approved first.')
+        return
     }
 
-    let hasError = false;
+    let hasError = false
 
     if (!form.abstract.trim()) {
-        abstractError.value = 'Abstract is required.';
-        hasError = true;
+        abstractError.value = 'Abstract is required.'
+        hasError = true
     }
 
     if (!form.manuscript) {
-        fileError.value = 'Please upload a manuscript file.';
-        hasError = true;
+        fileError.value = 'Please upload a manuscript file.'
+        hasError = true
     }
 
     if (form.manuscript && form.manuscript.size > MAX_FILE_SIZE) {
-        fileError.value = 'File is too large. Maximum size is 10MB.';
-        hasError = true;
+        fileError.value = 'File is too large. Maximum size is 10MB.'
+        hasError = true
     }
 
-    if (form.manuscript && form.manuscript.type !== 'application/pdf' && !form.manuscript.name.toLowerCase().endsWith('.pdf')) {
-        fileError.value = 'Only PDF files are allowed.';
-        hasError = true;
-    }
+    if (hasError) return
 
-    if (hasError) return;
-
-    isSaving.value = true;
+    isSaving.value = true
 
     form.post(route('student.submit-final-manuscript.store'), {
         forceFormData: true,
         preserveScroll: true,
         onSuccess: () => {
-            form.reset();
-            form.title = props.project?.title ?? '';
-            isSaving.value = false;
-            showSuccessAlert('Submitted Successfully', 'Final manuscript submitted successfully.');
+            form.reset()
+            form.title = props.project?.title ?? ''
+            isSaving.value = false
+            showSuccessAlert('Success', 'Final manuscript submitted.')
         },
         onError: (errors) => {
-            isSaving.value = false;
+            isSaving.value = false
 
-            if (errors.manuscript) {
-                fileError.value = String(errors.manuscript);
-                return;
-            }
-
-            if (errors.abstract) {
-                abstractError.value = String(errors.abstract);
-                return;
-            }
-
-            const firstError = errors.error || errors.title || 'Something went wrong.';
-            showErrorAlert('Submission Failed', String(firstError));
+            if (errors.manuscript) fileError.value = String(errors.manuscript)
+            if (errors.abstract) abstractError.value = String(errors.abstract)
         },
-        onFinish: () => {
-            isSaving.value = false;
-        },
-    });
+    })
 }
 </script>
 
@@ -171,169 +147,141 @@ function submit() {
         <AppSidebar />
 
         <SidebarInset>
+            <!-- HEADER -->
             <header class="flex h-16 items-center gap-3 border-b px-6">
                 <SidebarTrigger />
                 <Separator orientation="vertical" class="h-6" />
 
                 <Breadcrumb>
                     <BreadcrumbList>
-                        <BreadcrumbItem class="font">Submit Manuscript</BreadcrumbItem>
+                        <BreadcrumbItem>Submit Manuscript</BreadcrumbItem>
                     </BreadcrumbList>
                 </Breadcrumb>
             </header>
 
             <div class="space-y-6 p-6">
-                <div class="rounded-2xl border border-gray-200 bg-white px-6 py-6 shadow-sm">
-                    <h1 class="text-2xl font-bold text-gray-900">Final Manuscript</h1>
-                    <p class="mt-1 text-sm text-gray-500">Submit and manage your final manuscript for project review.</p>
+
+                <!-- TITLE -->
+                <div class="rounded-2xl border bg-white p-6 shadow-sm">
+                    <h1 class="text-2xl font-bold">Final Manuscript</h1>
+                    <p class="text-sm text-gray-500">
+                        Submit your final manuscript.
+                    </p>
                 </div>
 
-                <div v-if="!project" class="flex min-h-[60vh] items-center justify-center">
-                    <Empty class="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-sm">
+                <!-- EMPTY STATES -->
+                <div v-if="!project" class="flex justify-center">
+                    <Empty class="max-w-md border bg-white shadow-sm">
                         <EmptyHeader>
-                            <EmptyMedia variant="icon">
-                                <FileText />
-                            </EmptyMedia>
+                            <EmptyMedia variant="icon"><FileText /></EmptyMedia>
                         </EmptyHeader>
-
                         <EmptyTitle>No Project Found</EmptyTitle>
-                        <EmptyDescription>No project found for your account.</EmptyDescription>
-
-                        <EmptyContent />
+                        <EmptyDescription>No project available.</EmptyDescription>
                     </Empty>
                 </div>
 
-                <div v-else-if="manuscriptStatus === 'approved'" class="flex min-h-[60vh] items-center justify-center">
-                    <Empty class="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-sm">
+                <div v-else-if="manuscriptStatus === 'approved'" class="flex justify-center">
+                    <Empty class="max-w-md border bg-white shadow-sm">
                         <EmptyHeader>
-                            <EmptyMedia variant="icon">
-                                <CheckCircle2 />
-                            </EmptyMedia>
+                            <EmptyMedia variant="icon"><CheckCircle2 /></EmptyMedia>
                         </EmptyHeader>
-
                         <EmptyTitle>Approved</EmptyTitle>
-                        <EmptyDescription> Your final manuscript has been successfully approved. </EmptyDescription>
+                        <EmptyDescription>Your manuscript is approved.</EmptyDescription>
                     </Empty>
                 </div>
 
-                <div v-else-if="project.adviser_id && manuscriptSubmitted" class="flex min-h-[60vh] items-center justify-center">
-                    <Empty class="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-sm">
+                <div v-else-if="manuscriptSubmitted" class="flex justify-center">
+                    <Empty class="max-w-md border bg-white shadow-sm">
                         <EmptyHeader>
-                            <EmptyMedia variant="icon">
-                                <Clock3 />
-                            </EmptyMedia>
+                            <EmptyMedia variant="icon"><Clock3 /></EmptyMedia>
                         </EmptyHeader>
-
-                        <EmptyTitle>Pending Review</EmptyTitle>
-                        <EmptyDescription>Your manuscript is under review.</EmptyDescription>
+                        <EmptyTitle>Pending</EmptyTitle>
+                        <EmptyDescription>Under review.</EmptyDescription>
                     </Empty>
                 </div>
 
-              <div v-else-if="!canSubmitFinalManuscript" class="flex min-h-[60vh] items-center justify-center">
-    <Empty class="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <EmptyHeader>
-            <EmptyMedia variant="icon">
-                <LockKeyhole />
-            </EmptyMedia>
-        </EmptyHeader>
+                <div v-else-if="!canSubmitFinalManuscript" class="flex justify-center">
+                    <Empty class="max-w-md border bg-white shadow-sm">
+                        <EmptyHeader>
+                            <EmptyMedia variant="icon"><LockKeyhole /></EmptyMedia>
+                        </EmptyHeader>
+                        <EmptyTitle>Not Allowed</EmptyTitle>
+                        <EmptyDescription>Adviser approval required.</EmptyDescription>
+                    </Empty>
+                </div>
 
-        <EmptyTitle>Final Manuscript </EmptyTitle>
-        <EmptyDescription>
-            Your Manuscript document must be approved by your adviser before submitting the final manuscript.
-        </EmptyDescription>
+                <!-- FORM -->
+                <div v-else class="rounded-2xl border bg-white p-6 shadow-sm">
+                    <form @submit.prevent="submit" class="space-y-6">
 
-        <EmptyContent />
-    </Empty>
-</div>
-
-                <div v-else class="w-full rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-                    <form @submit.prevent="submit" class="space-y-8">
-                        <div class="space-y-6">
-                            <div>
-                                <p class="mb-1 text-xs text-gray-500">Title</p>
-                                <p class="border-b border-gray-200 pb-2 font-medium text-gray-900">
-                                    {{ form.title }}
-                                </p>
-                            </div>
-
-                            <div class="grid grid-cols-1 gap-6 text-sm md:grid-cols-2 xl:grid-cols-3">
-                                <div>
-                                    <p class="text-gray-500">Department</p>
-                                    <p class="border-b border-gray-200 pb-1 text-gray-900">
-                                        {{ project.department }}
-                                    </p>
-                                </div>
-
-                                <div>
-                                    <p class="text-gray-500">Academic Year</p>
-                                    <p class="border-b border-gray-200 pb-1 text-gray-900">
-                                        {{ project.academic_year }}
-                                    </p>
-                                </div>
-
-                                <div>
-                                    <p class="text-gray-500">Project Type</p>
-                                    <p class="border-b border-gray-200 pb-1 text-gray-900">
-                                        {{ project.project_type }}
-                                    </p>
-                                </div>
-                            </div>
+                        <!-- TITLE -->
+                        <div>
+                            <p class="text-xs text-gray-500">Title</p>
+                            <p class="border-b py-2 font-medium">
+                                {{ form.title }}
+                            </p>
                         </div>
 
+                        <!-- ABSTRACT -->
                         <div>
-                            <label class="text-sm font-medium text-gray-700">Abstract</label>
+                            <label class="text-sm font-medium">Abstract</label>
+
                             <textarea
                                 v-model="form.abstract"
-                                rows="10"
-                                class="mt-2 w-full rounded-xl border border-gray-300 px-4 py-3 outline-none transition focus:border-[#0C4B05] focus:ring-2 focus:ring-[#0C4B05]/10"
-                                placeholder="Write your abstract..."
+                                rows="8"
+                                class="mt-2 w-full rounded-xl border px-4 py-3 focus:border-[#0C4B05]"
                             />
 
-                            <p v-if="abstractError" class="mt-2 text-xs text-red-500">
+                            <p v-if="abstractError" class="text-xs text-red-500 mt-1">
                                 {{ abstractError }}
                             </p>
                         </div>
 
+                        <!-- FILE UPLOAD -->
                         <div>
-                            <label class="mb-2 block text-sm font-medium text-gray-700"> Upload Manuscript </label>
+                            <label class="text-sm font-medium">Upload Manuscript</label>
 
                             <label
-                                class="flex min-h-[170px] w-full cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-gray-50 px-6 py-8 text-center transition hover:border-[#0C4B05] hover:bg-green-50/40"
-                                :class="fileError ? 'border-red-300 bg-red-50 hover:border-red-400 hover:bg-red-50' : ''"
+                                class="mt-2 flex min-h-[160px] flex-col items-center justify-center rounded-2xl border border-dashed bg-gray-50 cursor-pointer transition"
+                                :class="fileError ? 'border-red-400 bg-red-50' : 'hover:border-[#0C4B05]'"
                             >
-                                <UploadCloud class="mb-3 h-10 w-10" :class="fileError ? 'text-red-500' : 'text-[#0C4B05]'" />
+                                <UploadCloud
+                                    class="h-10 w-10 mb-2"
+                                    :class="fileError ? 'text-red-500' : 'text-[#0C4B05]'"
+                                />
 
-                                <span class="text-sm font-medium text-gray-700"> Click to upload or drag file here </span>
+                                <span class="text-sm">Click to upload</span>
+                                <span class="text-xs text-gray-500">PDF • Max 10MB</span>
 
-                                <span class="mt-1 text-xs text-gray-500"> Supported files: PDF only, maximum 10MB </span>
-
-                                <input type="file" accept="application/pdf,.pdf" @change="handleFileChange" class="hidden" />
+                                <input type="file" accept=".pdf" @change="handleFileChange" class="hidden" />
                             </label>
 
-                            <p v-if="form.manuscript" class="mt-3 text-sm text-gray-600">
-                                Selected:
-                                <span class="font-medium">{{ cleanFileName(form.manuscript.name) }}</span>
+                            <!-- selected file -->
+                            <p v-if="form.manuscript" class="mt-2 text-sm">
+                                Selected: <span class="font-medium">{{ cleanFileName(form.manuscript.name) }}</span>
                             </p>
 
-                            <p v-if="fileError" class="mt-2 text-xs font-medium text-red-500">
+                            <!-- ✅ IN-PAGE ERROR -->
+                            <p v-if="fileError" class="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-600">
                                 {{ fileError }}
                             </p>
                         </div>
 
-                        <div class="pt-2">
-                            <div class="flex w-full justify-end">
-                                <button
-                                    type="submit"
-                                    :disabled="isSaving"
-                                    class="flex min-w-[190px] items-center justify-center gap-2 rounded-full bg-[#0C4B05] px-10 py-3 text-sm font-semibold text-white transition-all duration-200 hover:bg-[#0a3d04] hover:shadow-md active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                    <LoaderCircle v-if="isSaving" class="h-4 w-4 animate-spin" />
-                                    {{ isSaving ? 'Uploading...' : 'Submit' }}
-                                </button>
-                            </div>
+                        <!-- SUBMIT -->
+                        <div class="flex justify-end">
+                            <button
+                                type="submit"
+                                :disabled="isSaving"
+                                class="flex items-center gap-2 rounded-full bg-[#0C4B05] px-8 py-3 text-white"
+                            >
+                                <LoaderCircle v-if="isSaving" class="animate-spin h-4 w-4" />
+                                {{ isSaving ? 'Uploading...' : 'Submit' }}
+                            </button>
                         </div>
+
                     </form>
                 </div>
+
             </div>
         </SidebarInset>
     </SidebarProvider>

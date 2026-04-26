@@ -14,7 +14,7 @@ import { SECTION_DEFINITIONS } from '@/constants/submissionSections';
 import type { Project } from '@/types/project';
 import type { Submission } from '@/types/submission';
 import { parseSubmissionSlug } from '@/utils/parseSubmissionSlug';
-import { Head, Link, router, usePage, usePoll } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { ChevronDown, ChevronUp, CloudUpload, FileText, FolderOpen, LoaderCircle, LockKeyhole } from 'lucide-vue-next';
 import { computed, onMounted, ref } from 'vue';
 
