@@ -15,7 +15,7 @@ class AutoSoftDeleteStudents extends Command
     {
         // TEST MODE:
         // Any completed project older than 1 minute will qualify
-        $cutoff = Carbon::now()->subMinute();
+        $cutoff = Carbon::now()->subMonth(3);
 
         $this->info('Cutoff: ' . $cutoff->toDateTimeString());
 
