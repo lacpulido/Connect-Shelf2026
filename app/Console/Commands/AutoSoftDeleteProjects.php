@@ -9,13 +9,13 @@ use Illuminate\Support\Carbon;
 class AutoSoftDeleteProjects extends Command
 {
     protected $signature = 'app:auto-soft-delete-projects';
-    protected $description = 'Soft delete completed projects automatically';
+    protected $description = 'Soft delete completed projects automatically after 1 month';
 
     public function handle(): int
     {
-        $cutoff = Carbon::now()->subMinute();
+        $cutoff = Carbon::now('Asia/Manila')->subMonth();
 
-        $this->info('Cutoff: ' . $cutoff->toDateTimeString());
+        $this->info('Cutoff (1 month ago): ' . $cutoff->toDateTimeString());
 
         $projects = Project::query()
             ->where('status', 'Completed')
