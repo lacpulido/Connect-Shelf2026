@@ -80,7 +80,7 @@ return [
                         ['name' => 'status', 'type' => 'string', 'optional' => true],
                         ['name' => 'created_at', 'type' => 'int64'],
 
-                        // ✅ MANUAL VECTOR FIELD (OLLAMA)
+                  
                         [
                             'name' => 'embedding',
                             'type' => 'float[]',

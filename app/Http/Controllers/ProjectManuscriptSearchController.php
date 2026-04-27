@@ -51,7 +51,7 @@ class ProjectManuscriptSearchController extends Controller
                                 'q' => $query,
                                 'query_by' => 'title,abstract',
                                 'query_by_weights' => '4,2',
-                                'vector_query' => "embedding:($embeddingString, k:10, alpha:0.3, distance_threshold:0.3)",
+                                'vector_query' => "embedding:($embeddingString, k:10, alpha:0.3, distance_threshold:0.2)",
                                 'prefix' => true,
                                 'num_typos' => 2,
                                 'per_page' => 10,
