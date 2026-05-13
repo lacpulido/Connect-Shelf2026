@@ -2,22 +2,22 @@
 import { computed } from 'vue'
 
 interface Activity {
-  id: string
+  id: string | number
   type: string
   title: string
-  description?: string
+  description?: string | null
   created_at: string
-  project_title?: string
+  project_title?: string | null
 }
 
 const props = withDefaults(defineProps<{
   activities?: Activity[]
 }>(), {
-  activities: () => []
+  activities: () => [],
 })
 
 const normalizeType = (type: string) => {
-  switch (type?.toLowerCase()) {
+  switch (String(type ?? '').toLowerCase()) {
     case 'submission':
     case 'submitted':
       return 'submission'
@@ -25,14 +25,18 @@ const normalizeType = (type: string) => {
     case 'comment':
     case 'under_review':
     case 'review':
+    case 'pending':
       return 'comment'
 
     case 'approved':
+    case 'accepted':
     case 'completed':
+    case 'ongoing':
       return 'approved'
 
     case 'revision':
     case 'needs_revision':
+    case 'declined':
       return 'revision'
 
     default:
@@ -42,12 +46,22 @@ const normalizeType = (type: string) => {
 
 const recentActivities = computed(() => {
   return [...props.activities]
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    .slice(0, 3)
+    .filter((activity) => activity.created_at)
+    .sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() -
+        new Date(a.created_at).getTime()
+    )
+    .slice(0, 2) // only display 1-2 recent activities
 })
 
 const formatDate = (date: string) => {
   const d = new Date(date)
+
+  if (Number.isNaN(d.getTime())) {
+    return 'N/A'
+  }
+
   return d.toLocaleString('en-US', {
     month: 'short',
     day: '2-digit',
@@ -61,15 +75,19 @@ const formatDate = (date: string) => {
 const getColor = (type: string) => {
   switch (type) {
     case 'submission':
-      return 'border-blue-500 text-blue-600'
+      return 'border-blue-500 bg-blue-50 text-blue-600'
+
     case 'comment':
-      return 'border-purple-500 text-purple-600'
+      return 'border-purple-500 bg-purple-50 text-purple-600'
+
     case 'approved':
-      return 'border-green-500 text-green-600'
+      return 'border-green-500 bg-green-50 text-green-600'
+
     case 'revision':
-      return 'border-red-500 text-red-600'
+      return 'border-red-500 bg-red-50 text-red-600'
+
     default:
-      return 'border-gray-300 text-gray-500'
+      return 'border-gray-300 bg-gray-50 text-gray-500'
   }
 }
 
@@ -77,12 +95,16 @@ const getLabel = (type: string) => {
   switch (type) {
     case 'submission':
       return 'Submitted'
+
     case 'comment':
       return 'Under Review'
+
     case 'approved':
       return 'Approved'
+
     case 'revision':
       return 'Needs Revision'
+
     default:
       return 'Activity'
   }
@@ -90,8 +112,8 @@ const getLabel = (type: string) => {
 </script>
 
 <template>
-  <div class="rounded-2xl border border-gray-200 bg-white">
-    <div class="border-b px-6 py-4">
+  <div class="rounded-2xl border border-gray-200 bg-white shadow-sm">
+    <div class="border-b border-gray-100 px-5 py-4 sm:px-6">
       <h2 class="text-lg font-semibold text-gray-800">
         Recent Activities
       </h2>
@@ -99,33 +121,33 @@ const getLabel = (type: string) => {
 
     <div
       v-if="recentActivities.length === 0"
-      class="p-8 text-center text-gray-500"
+      class="p-8 text-center text-sm text-gray-500"
     >
       No recent activities
     </div>
 
-    <div v-else class="divide-y">
+    <div v-else class="divide-y divide-gray-100">
       <div
         v-for="activity in recentActivities"
         :key="activity.id"
-        class="px-6 py-6"
+        class="px-5 py-5 sm:px-6"
       >
-        <div class="flex items-start justify-between gap-4">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div class="min-w-0 flex-1">
-            <p class="text-[15px] font-semibold text-gray-800">
+            <p class="break-words text-[15px] font-semibold text-gray-800">
               {{ activity.title }}
             </p>
 
             <p
               v-if="activity.project_title"
-              class="mt-1 text-sm font-medium text-[#0C4B05]"
+              class="mt-1 break-words text-sm font-medium text-[#0C4B05]"
             >
               Project: {{ activity.project_title }}
             </p>
           </div>
 
           <span
-            class="shrink-0 rounded-full border px-3 py-1 text-xs font-medium"
+            class="w-fit shrink-0 rounded-full border px-3 py-1 text-xs font-medium"
             :class="getColor(normalizeType(activity.type))"
           >
             {{ getLabel(normalizeType(activity.type)) }}
@@ -134,7 +156,7 @@ const getLabel = (type: string) => {
 
         <p
           v-if="activity.description"
-          class="mt-2 text-sm text-gray-600"
+          class="mt-2 break-words text-sm leading-6 text-gray-600"
         >
           {{ activity.description }}
         </p>

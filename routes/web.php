@@ -25,6 +25,7 @@ use App\Http\Controllers\student\SubmitFinalManuscriptController;
 use App\Http\Controllers\student\StudentFormsAndTemplatesController;
 use App\Http\Controllers\student\StudentDashboardController;
 
+use App\Http\Controllers\faculty\AdviserRequestController;
 use App\Http\Controllers\faculty\StudentsSubmissionController;
 use App\Http\Controllers\faculty\ListofProjectController;
 use App\Http\Controllers\faculty\ReviewDocumentController;
@@ -38,6 +39,9 @@ use App\Http\Controllers\FocalPerson\AssignPanelistToProjectsController;
 use App\Http\Controllers\FocalPerson\SetScheduleController;
 use App\Http\Controllers\FocalPerson\FormsAndTemplatesController;
 use App\Http\Controllers\FocalPerson\DepartmentFacultyController;
+use App\Http\Controllers\FocalPerson\ProposalController;
+
+
 use App\Http\Controllers\DepartmentChair\ResearchArchiveController;
 use App\Http\Controllers\DepartmentChair\FinalManuscriptReviewController;
 use App\Http\Controllers\FocalPerson\ManageProjectController;
@@ -220,6 +224,16 @@ Route::middleware(['auth', 'verified', 'access:student'])
 
         Route::get('/forms/{form}/download', [StudentFormsAndTemplatesController::class, 'download'])
             ->name('forms.download');
+        Route::get('/projects/{project:slug}', [StudentDashboardController::class, 'show'])
+            ->name('projects.show');
+
+        Route::get('/projects/{project:slug}/edit', [StudentDashboardController::class, 'edit'])
+            ->name('projects.edit');
+
+        Route::put('/projects/{project:slug}', [StudentDashboardController::class, 'update'])
+            ->name('projects.update');
+         Route::post('/projects/{project:slug}/resubmit-topics', [StudentDashboardController::class, 'resubmitTopics'])
+    ->name('projects.resubmit-topics');
     });
 
 Route::middleware(['auth', 'verified', 'access:faculty'])
@@ -229,6 +243,15 @@ Route::middleware(['auth', 'verified', 'access:faculty'])
 
         Route::get('/dashboard', [FacultyDashboardController::class, 'index'])
             ->name('dashboard');
+
+        Route::get('/adviser-requests', [AdviserRequestController::class, 'index'])
+            ->name('adviser-requests.index');
+
+        Route::post('/adviser-requests/{project:slug}/accept', [AdviserRequestController::class, 'accept'])
+            ->name('adviser-requests.accept');
+
+        Route::post('/adviser-requests/{project:slug}/decline', [AdviserRequestController::class, 'decline'])
+            ->name('adviser-requests.decline');
 
         Route::get('/projects', [ListofProjectController::class, 'index'])
             ->name('projects');
@@ -353,6 +376,28 @@ Route::middleware(['auth', 'verified', 'access:Focal Person'])
 
         Route::post('/projects/mark-first-semester-passed', [ManageProjectController::class, 'markFirstSemesterPassed'])
             ->name('projects.mark-first-semester-passed');
+        Route::get(
+            '/proposals',
+            [ProposalController::class, 'index']
+        )->name('proposals.index');
+
+        Route::post(
+            '/proposals/{project:slug}/select-title',
+            [ProposalController::class, 'selectTitle']
+        )->name('proposals.select-title');
+
+       Route::get('/department-faculty', [DepartmentFacultyController::class, 'index'])
+    ->name('department.faculty');
+
+Route::patch('/department-faculty/{faculty}/show', [DepartmentFacultyController::class, 'show'])
+    ->name('department.faculty.show');
+
+Route::patch('/department-faculty/{faculty}/hide', [DepartmentFacultyController::class, 'hide'])
+    ->name('department.faculty.hide');
+        Route::post('/proposals/{project:slug}/share-adviser', [ProposalController::class, 'shareProposalToAdviser'])
+        ->name('proposals.share-adviser');
+        Route::post('/projects/{project:slug}/resubmit-topics', [StudentDashboardController::class, 'resubmitTopics'])
+    ->name('projects.resubmit-topics');
     });
 //Notifications
 Route::middleware(['auth'])->group(function () {

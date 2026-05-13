@@ -4,6 +4,9 @@ namespace App\Models;
 
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -26,6 +29,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'status',
         'is_active',
         'deactivated_at',
+        'adviser_is_visible',
     ];
 
     protected $hidden = [
@@ -38,9 +42,10 @@ class User extends Authenticatable implements MustVerifyEmail
         'deleted_at' => 'datetime',
         'deactivated_at' => 'datetime',
         'is_active' => 'boolean',
+        'adviser_is_visible' => 'boolean',
     ];
 
-    public function roles()
+    public function roles(): BelongsToMany
     {
         return $this->belongsToMany(
             Role::class,
@@ -50,17 +55,17 @@ class User extends Authenticatable implements MustVerifyEmail
         );
     }
 
-    public function department()
+    public function department(): BelongsTo
     {
         return $this->belongsTo(Department::class);
     }
 
-    public function userNotifications()
+    public function userNotifications(): HasMany
     {
         return $this->hasMany(Notification::class);
     }
 
-    public function projects()
+    public function projects(): BelongsToMany
     {
         return $this->belongsToMany(
             Project::class,
@@ -70,15 +75,21 @@ class User extends Authenticatable implements MustVerifyEmail
         )->withTimestamps();
     }
 
-   public function panelProjects()
-{
-    return $this->belongsToMany(
-        Project::class,
-        'project_panelists',
-        'panelist_id',
-        'project_id'
-    )->withTimestamps();
-}
+    public function panelProjects(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            Project::class,
+            'project_panelists',
+            'panelist_id',
+            'project_id'
+        )->withTimestamps();
+    }
+
+    public function assignedProjects(): HasMany
+    {
+        return $this->hasMany(Project::class, 'adviser_id', 'id');
+    }
+
     public function hasRole(string $role): bool
     {
         return $this->roles()
@@ -101,17 +112,8 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasRole('Focal Person');
     }
 
-   // public function getFullNameAttribute(): string
-   // {
-       // return trim(implode(' ', array_filter([
-           // $this->first_name,
-           // $this->middle_name,
-            //$this->last_name,
-           // $this->extension_name,
-      //  ])));
-   // }
     public function getFullNameAttribute(): string
-{
-    return trim("{$this->first_name} {$this->last_name}") ?: 'N/A';
-}
+    {
+        return trim("{$this->first_name} {$this->last_name}") ?: 'N/A';
+    }
 }

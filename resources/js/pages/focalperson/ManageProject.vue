@@ -14,6 +14,8 @@ import { DateFormatter, getLocalTimeZone, parseDate, today } from '@internationa
 import { CalendarIcon, ChevronRight } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 
+type ManageTab = 'schedule' | 'panelists' | 'semester';
+
 type Department = {
     id: number;
     name: string;
@@ -63,11 +65,62 @@ const props = defineProps<{
     requestedTime?: string | null;
 }>();
 
-const { showSuccessAlert, showErrorAlert, showWarningAlert } = useAlerts();
+const { showSuccessAlert, showErrorAlert, showWarningAlert, confirmAction } = useAlerts();
 
 const timeSlots = ['8:00 AM - 11:00 AM', '11:00 AM - 2:00 PM', '2:00 PM - 5:00 PM'];
 
-const activeTab = ref<'schedule' | 'panelists' | 'semester'>('schedule');
+const validTabs: ManageTab[] = ['schedule', 'panelists', 'semester'];
+
+const tabStorageKey = computed(() => `manage_project_tab_${props.project.id}`);
+
+const isValidTab = (tab: string | null): tab is ManageTab => {
+    return !!tab && validTabs.includes(tab as ManageTab);
+};
+
+const getInitialTab = (): ManageTab => {
+    if (typeof window === 'undefined') return 'schedule';
+
+    const params = new URLSearchParams(window.location.search);
+    const urlTab = params.get('tab');
+
+    if (isValidTab(urlTab)) {
+        localStorage.setItem(tabStorageKey.value, urlTab);
+        return urlTab;
+    }
+
+    const savedTab = localStorage.getItem(tabStorageKey.value);
+
+    if (isValidTab(savedTab)) {
+        const url = new URL(window.location.href);
+        url.searchParams.set('tab', savedTab);
+        window.history.replaceState({}, '', url.toString());
+
+        return savedTab;
+    }
+
+    return 'schedule';
+};
+
+const activeTab = ref<ManageTab>(getInitialTab());
+
+const setActiveTab = (tab: ManageTab) => {
+    activeTab.value = tab;
+};
+
+watch(
+    activeTab,
+    (tab) => {
+        if (typeof window === 'undefined') return;
+
+        localStorage.setItem(tabStorageKey.value, tab);
+
+        const url = new URL(window.location.href);
+        url.searchParams.set('tab', tab);
+
+        window.history.replaceState({}, '', url.toString());
+    },
+    { immediate: true },
+);
 
 const defenseDate = ref<DateValue>();
 const defenseTime = ref<string | null>(null);
@@ -91,6 +144,7 @@ const df = new DateFormatter('en-US', {
 
 const toDateValue = (date?: string | null) => {
     if (!date) return undefined;
+
     try {
         return parseDate(date);
     } catch {
@@ -100,17 +154,32 @@ const toDateValue = (date?: string | null) => {
 
 const toBackendDate = (date?: DateValue) => {
     if (!date) return null;
+
     return date.toDate(getLocalTimeZone()).toISOString().split('T')[0];
 };
 
+const syncScheduleFields = () => {
+    const scheduleDate = props.project.schedule?.requested_defense_date
+        ? props.project.schedule.requested_defense_date
+        : props.project.schedule?.defense_date;
+
+    defenseDate.value = toDateValue(scheduleDate);
+    defenseTime.value = props.project.schedule?.requested_defense_time ?? props.project.schedule?.defense_time ?? null;
+    venue.value = props.project.schedule?.venue ?? '';
+};
+
 watch(
-    () => props.project,
-    (project) => {
-        const scheduleDate = project.schedule?.requested_defense_date ? project.schedule.requested_defense_date : project.schedule?.defense_date;
-        defenseDate.value = toDateValue(scheduleDate);
-        defenseTime.value = project.schedule?.requested_defense_time ?? project.schedule?.defense_time ?? null;
-        venue.value = project.schedule?.venue ?? '';
-        localPanelists.value = [...(project.panelists ?? [])];
+    () => props.project.schedule,
+    () => {
+        syncScheduleFields();
+    },
+    { immediate: true, deep: true },
+);
+
+watch(
+    () => props.project.panelists,
+    (panelists) => {
+        localPanelists.value = [...(panelists ?? [])];
     },
     { immediate: true, deep: true },
 );
@@ -122,9 +191,7 @@ const isRescheduleRequested = computed(() => {
 });
 
 const isScheduleConfirmed = computed(() => {
-    return (
-        props.project.schedule?.is_confirmed === true || props.project.schedule?.is_confirmed === 1 || props.project.schedule?.status === 'confirmed'
-    );
+    return props.project.schedule?.is_confirmed === true || props.project.schedule?.is_confirmed === 1 || props.project.schedule?.status === 'confirmed';
 });
 
 const canEditSchedule = computed(() => {
@@ -153,8 +220,6 @@ const scheduleStatusLabel = computed(() => {
     return 'Schedule Set';
 });
 
-const panelistCount = computed(() => localPanelists.value.length);
-
 const hasReachedMaximum = computed(() => localPanelists.value.length >= 3);
 
 const availableFaculties = computed(() => {
@@ -181,6 +246,7 @@ const isFirstSemester = computed(() => {
 
 const formatDate = (date?: string | null) => {
     if (!date) return 'No date provided';
+
     return new Date(date).toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'long',
@@ -194,7 +260,9 @@ const goBack = () => {
 
 const reloadProject = () => {
     router.reload({
-        only: ['project', 'faculties', 'requestedDate', 'requestedTime'],
+        only: ['project', 'faculties', 'departments', 'requestedDate', 'requestedTime'],
+        preserveScroll: true,
+        preserveState: true,
     });
 };
 
@@ -223,12 +291,14 @@ const submitSchedule = () => {
         },
         {
             preserveScroll: true,
+            preserveState: true,
             onSuccess: () => {
                 showSuccessAlert('Schedule Saved', 'The defense schedule has been saved successfully.');
                 reloadProject();
             },
             onError: (errors) => {
                 const firstError = errors?.schedule || Object.values(errors || {})[0] || 'Unable to save the defense schedule.';
+
                 showErrorAlert('Failed', Array.isArray(firstError) ? String(firstError[0]) : String(firstError));
             },
             onFinish: () => {
@@ -239,7 +309,8 @@ const submitSchedule = () => {
 };
 
 const selectFaculty = (faculty: Faculty) => {
-    if (hasReachedMaximum.value) return;
+    if (hasReachedMaximum.value || panelistProcessing.value) return;
+
     selectedPanelist.value = faculty.id;
     showDropdown.value = false;
     errorMessage.value = '';
@@ -248,7 +319,7 @@ const selectFaculty = (faculty: Faculty) => {
 const assignPanelist = () => {
     if (!selectedPanelist.value || panelistProcessing.value || hasReachedMaximum.value) return;
 
-    const faculty = props.faculties.find((item) => Number(item.id) === Number(selectedPanelist.value));
+    const facultyId = selectedPanelist.value;
 
     panelistProcessing.value = true;
     errorMessage.value = '';
@@ -257,30 +328,33 @@ const assignPanelist = () => {
         route('focalperson.panelists.store'),
         {
             project_id: props.project.id,
-            faculty_id: selectedPanelist.value,
+            faculty_id: facultyId,
         },
         {
             preserveScroll: true,
-            onSuccess: () => {
-                if (faculty) {
-                    const alreadyExists = localPanelists.value.some((p) => Number(p.id) === Number(faculty.id));
-                    if (!alreadyExists) {
-                        localPanelists.value.push(faculty);
-                    }
-                }
+            preserveState: true,
+            replace: true,
+            only: ['project', 'faculties', 'departments', 'requestedDate', 'requestedTime'],
 
+            onSuccess: () => {
                 selectedPanelist.value = null;
                 showDropdown.value = false;
                 selectedDepartmentId.value = '';
+                errorMessage.value = '';
+
+                setActiveTab('panelists');
 
                 showSuccessAlert('Panelist Added', 'The panelist has been assigned successfully.');
-                reloadProject();
             },
+
             onError: (errors) => {
                 const firstError = errors?.faculty_id || Object.values(errors || {})[0] || 'Failed to assign panelist.';
+
                 errorMessage.value = Array.isArray(firstError) ? String(firstError[0]) : String(firstError);
+
                 showErrorAlert('Failed', errorMessage.value);
             },
+
             onFinish: () => {
                 panelistProcessing.value = false;
             },
@@ -288,8 +362,17 @@ const assignPanelist = () => {
     );
 };
 
-const markFirstSemesterPassed = () => {
+const markFirstSemesterPassed = async () => {
     if (!isFirstSemester.value || semesterProcessing.value) return;
+
+    const result = await confirmAction(
+        'Are you sure?',
+        'This will move the project to 2nd Semester and reset the schedule. Please confirm before continuing.',
+        'Yes, mark as passed',
+        'Cancel',
+    );
+
+    if (!result.isConfirmed) return;
 
     semesterProcessing.value = true;
 
@@ -300,13 +383,16 @@ const markFirstSemesterPassed = () => {
         },
         {
             preserveScroll: true,
+            preserveState: true,
             onSuccess: () => {
                 showSuccessAlert('Project Updated', 'Project passed 1st Semester. Semester changed to 2nd Semester and schedule was reset.');
+
+                setActiveTab('schedule');
                 reloadProject();
-                activeTab.value = 'schedule';
             },
             onError: (errors) => {
                 const firstError = errors?.semester || Object.values(errors || {})[0] || 'Unable to update project semester.';
+
                 showErrorAlert('Failed', Array.isArray(firstError) ? String(firstError[0]) : String(firstError));
             },
             onFinish: () => {
@@ -359,7 +445,10 @@ const markFirstSemesterPassed = () => {
                 <div class="rounded-2xl border border-gray-200 bg-white shadow-sm">
                     <!-- Tab Navigation -->
                     <div class="border-b border-gray-100 px-3 pt-3 sm:px-6 sm:pt-4">
-                        <div class="flex gap-1 overflow-x-auto sm:flex-wrap sm:gap-2" style="-webkit-overflow-scrolling: touch; scrollbar-width: none;">
+                        <div
+                            class="flex gap-1 overflow-x-auto sm:flex-wrap sm:gap-2"
+                            style="-webkit-overflow-scrolling: touch; scrollbar-width: none"
+                        >
                             <button
                                 type="button"
                                 @click="activeTab = 'schedule'"
@@ -397,10 +486,8 @@ const markFirstSemesterPassed = () => {
 
                     <!-- Tab Content -->
                     <div class="p-3 sm:p-6">
-
                         <!-- ── Schedule Tab ── -->
                         <section v-if="activeTab === 'schedule'" class="rounded-2xl border border-gray-200 bg-gray-50 p-4 sm:p-5">
-
                             <!-- Reschedule Request Info -->
                             <div v-if="isRescheduleRequested" class="mb-4 rounded-2xl border border-gray-200 bg-white p-4 sm:mb-5 sm:p-5">
                                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
@@ -560,7 +647,13 @@ const markFirstSemesterPassed = () => {
                                             </span>
                                             <span v-else class="text-gray-400">Choose a faculty member</span>
 
-                                            <svg class="h-4 w-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                            <svg
+                                                class="h-4 w-4 shrink-0 text-gray-500"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2"
+                                                viewBox="0 0 24 24"
+                                            >
                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
                                             </svg>
                                         </button>
@@ -605,7 +698,7 @@ const markFirstSemesterPassed = () => {
                                         :disabled="!selectedPanelist || panelistProcessing || hasReachedMaximum"
                                         class="inline-flex w-full items-center justify-center rounded-xl bg-[#FFCD00] px-6 py-3 text-sm font-bold text-[#0C4B05] shadow-sm transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
                                     >
-                                        {{ panelistProcessing ? 'Adding...' : 'Add Panelist' }}
+                                       Add Panelist
                                     </button>
                                 </div>
 
@@ -657,7 +750,7 @@ const markFirstSemesterPassed = () => {
                         <!-- ── Semester Tab ── -->
                         <section v-else class="rounded-2xl border border-gray-200 bg-gray-50 p-4 sm:p-5">
                             <div class="mb-4 sm:mb-5">
-                                <h2 class="text-lg font-bold text-[#0C4B05]">Project Result / Semester</h2>
+                                <h2 class="text-lg font-bold text-[#0C4B05]">Semester</h2>
                             </div>
 
                             <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 md:grid-cols-3">
@@ -686,9 +779,10 @@ const markFirstSemesterPassed = () => {
                                 </div>
                             </div>
 
-                            <div v-if="isFirstSemester" class="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:mt-6 sm:p-5">
-                                <p class="text-sm font-bold text-amber-800">First Semester Project</p>
-                                <p class="mt-1 text-sm text-amber-700">
+                            <div v-if="isFirstSemester" class="mt-5 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:mt-6 sm:p-5">
+                                <p class="text-sm font-bold text-[#0C4B05]">First Semester Project</p>
+
+                                <p class="mt-1 text-sm text-gray-600">
                                     Click the button below only if this project passed the 1st Semester. This will move the project to 2nd Semester
                                     and reset the schedule.
                                 </p>
@@ -705,7 +799,6 @@ const markFirstSemesterPassed = () => {
                                 </div>
                             </div>
                         </section>
-
                     </div>
                 </div>
             </main>

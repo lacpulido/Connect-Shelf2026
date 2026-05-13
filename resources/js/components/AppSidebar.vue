@@ -10,14 +10,17 @@ import {
     Calendar1,
     ChevronDown,
     ChevronUp,
+    ClipboardList,
     FileText,
     FolderClosed,
     LayoutGrid,
     List,
     Search,
     Upload,
+    UserCheck,
     Users,
 } from 'lucide-vue-next';
+
 import { computed, ref, watch } from 'vue';
 
 type ExtendedUser = {
@@ -71,6 +74,11 @@ const mainNavItems = computed<SidebarNavItem[]>(() => {
                 title: 'Overview',
                 href: route('faculty.dashboard'),
                 icon: LayoutGrid,
+            },
+            {
+                title: 'Adviser Requests',
+                href: route('faculty.adviser-requests.index'),
+                icon: UserCheck,
             },
             {
                 title: 'Projects',
@@ -132,7 +140,7 @@ const othersNavItems = computed<SidebarNavItem[]>(() => {
                 icon: Users,
             },
             {
-                title: 'Research Archive',
+                title: 'Research Manuscripts',
                 href: route('departmentchair.researcharchives'),
                 icon: Archive,
             },
@@ -142,9 +150,19 @@ const othersNavItems = computed<SidebarNavItem[]>(() => {
     if (isFocalPerson.value) {
         items.push(
             {
+                title: 'Proposals',
+                href: route('focalperson.proposals.index'),
+                icon: ClipboardList,
+            },
+            {
                 title: 'List of Projects',
                 href: route('focalperson.listofprojects'),
                 icon: List,
+            },
+            {
+                title: 'Department Faculty',
+                href: route('focalperson.department.faculty'),
+                icon: Users,
             },
             {
                 title: 'Forms and Templates',
@@ -153,7 +171,6 @@ const othersNavItems = computed<SidebarNavItem[]>(() => {
             },
         );
     }
-
     return items;
 });
 
@@ -177,12 +194,7 @@ const isActive = (item: SidebarNavItem): boolean => {
 </script>
 
 <template>
-    <Sidebar
-        collapsible="icon"
-        variant="inset"
-        :default-open="rememberedState.sidebarOpen"
-        @update:open="rememberedState.sidebarOpen = $event"
-    >
+    <Sidebar collapsible="icon" variant="inset" :default-open="rememberedState.sidebarOpen" @update:open="rememberedState.sidebarOpen = $event">
         <SidebarHeader class="flex h-28 items-center justify-center">
             <Link :href="route('home')" class="flex items-center justify-center">
                 <AppLogo class="h-20 w-auto object-contain transition-transform duration-200 hover:scale-105" />
@@ -202,11 +214,7 @@ const isActive = (item: SidebarNavItem): boolean => {
                         'bg-gray-200': isActive(item),
                     }"
                 >
-                    <component
-                        :is="item.icon"
-                        class="h-5 w-5 shrink-0"
-                        :class="isActive(item) ? 'text-gray-900' : 'text-gray-600'"
-                    />
+                    <component :is="item.icon" class="h-5 w-5 shrink-0" :class="isActive(item) ? 'text-gray-900' : 'text-gray-600'" />
 
                     <span class="ml-3 whitespace-nowrap text-sm font-medium group-data-[state=collapsed]:hidden">
                         {{ item.title }}
@@ -220,29 +228,15 @@ const isActive = (item: SidebarNavItem): boolean => {
                     class="group relative z-10 flex h-12 w-full cursor-pointer items-center justify-between rounded-xl bg-transparent px-4 text-left transition-all duration-200 hover:bg-gray-100 group-data-[state=collapsed]:justify-center group-data-[state=collapsed]:px-0"
                     @click="toggleOthers"
                 >
-                    <ChevronUp
-                        v-if="othersOpen"
-                        class="h-5 w-5 shrink-0 text-gray-600 group-data-[state=expanded]:hidden"
-                    />
+                    <ChevronUp v-if="othersOpen" class="h-5 w-5 shrink-0 text-gray-600 group-data-[state=expanded]:hidden" />
 
-                    <ChevronDown
-                        v-else
-                        class="h-5 w-5 shrink-0 text-gray-600 group-data-[state=expanded]:hidden"
-                    />
+                    <ChevronDown v-else class="h-5 w-5 shrink-0 text-gray-600 group-data-[state=expanded]:hidden" />
 
-                    <span class="whitespace-nowrap text-sm font-semibold text-gray-700 group-data-[state=collapsed]:hidden">
-                        Others
-                    </span>
+                    <span class="whitespace-nowrap text-sm font-semibold text-gray-700 group-data-[state=collapsed]:hidden"> Others </span>
 
-                    <ChevronUp
-                        v-if="othersOpen"
-                        class="h-4 w-4 shrink-0 text-gray-600 group-data-[state=collapsed]:hidden"
-                    />
+                    <ChevronUp v-if="othersOpen" class="h-4 w-4 shrink-0 text-gray-600 group-data-[state=collapsed]:hidden" />
 
-                    <ChevronDown
-                        v-else
-                        class="h-4 w-4 shrink-0 text-gray-600 group-data-[state=collapsed]:hidden"
-                    />
+                    <ChevronDown v-else class="h-4 w-4 shrink-0 text-gray-600 group-data-[state=collapsed]:hidden" />
                 </button>
 
                 <div v-if="othersOpen" class="space-y-1">
@@ -257,11 +251,7 @@ const isActive = (item: SidebarNavItem): boolean => {
                             'bg-gray-200': isActive(item),
                         }"
                     >
-                        <component
-                            :is="item.icon"
-                            class="h-5 w-5 shrink-0"
-                            :class="isActive(item) ? 'text-gray-900' : 'text-gray-600'"
-                        />
+                        <component :is="item.icon" class="h-5 w-5 shrink-0" :class="isActive(item) ? 'text-gray-900' : 'text-gray-600'" />
 
                         <span class="ml-3 whitespace-nowrap text-sm font-medium group-data-[state=collapsed]:hidden">
                             {{ item.title }}

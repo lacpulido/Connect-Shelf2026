@@ -13,7 +13,7 @@ import { SECTION_DEFINITIONS } from '@/constants/submissionSections'
 import type { Project, Submission } from '@/types'
 import { parseSubmissionSlug } from '@/utils/parseSubmissionSlug'
 import { Head, Link, router, usePage, usePoll } from '@inertiajs/vue3'
-import { ChevronDown, ChevronUp, FileText, SquarePen } from 'lucide-vue-next'
+import { ChevronDown, ChevronUp, FileText, SquarePen, X } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 
 type PageProps = {
@@ -45,22 +45,29 @@ const { openSections, toggleSection, isOpen } = useSubmissionAccordion(
 
 const activeReview = ref<number | null>(null)
 const reviewComment = ref('')
-const reviewDecision = ref<'approved' | 'needs_revision'>('approved')
+const reviewDecision = ref<'approved' | 'needs_revision'>('needs_revision')
 const submitting = ref(false)
 
+const selectedFileUrl = ref<string | null>(null)
+const selectedFileName = ref('')
+const isFileViewerOpen = ref(false)
+
 const hasProject = computed(() => !!project.value)
+
+const resetReviewForm = () => {
+    reviewComment.value = ''
+    reviewDecision.value = 'needs_revision'
+}
 
 const toggleReview = (id: number) => {
     if (activeReview.value === id) {
         activeReview.value = null
-        reviewComment.value = ''
-        reviewDecision.value = 'approved'
+        resetReviewForm()
         return
     }
 
     activeReview.value = id
-    reviewComment.value = ''
-    reviewDecision.value = 'approved'
+    resetReviewForm()
 }
 
 const resolveDocumentUrl = (version: Submission) => {
@@ -71,6 +78,18 @@ const resolveDocumentUrl = (version: Submission) => {
     }
 
     return version?.file_url ?? '#'
+}
+
+const openFileViewer = (version: Submission) => {
+    selectedFileUrl.value = resolveDocumentUrl(version)
+    selectedFileName.value = version.filename ?? 'Document Preview'
+    isFileViewerOpen.value = true
+}
+
+const closeFileViewer = () => {
+    isFileViewerOpen.value = false
+    selectedFileUrl.value = null
+    selectedFileName.value = ''
 }
 
 const submitReview = (documentSlug?: string) => {
@@ -90,8 +109,7 @@ const submitReview = (documentSlug?: string) => {
             onSuccess: () => {
                 const decision = reviewDecision.value
 
-                reviewComment.value = ''
-                reviewDecision.value = 'approved'
+                resetReviewForm()
                 activeReview.value = null
 
                 showSuccessAlert(
@@ -160,18 +178,19 @@ usePoll(2000, {
                     <h1 class="text-xl font-semibold text-gray-900">
                         {{ project?.title ?? 'Project Submissions' }}
                     </h1>
+
                     <p class="mt-1 text-sm text-gray-500">
                         Review submitted project documents and provide feedback.
                     </p>
 
-                   <button
-    v-if="project"
-    type="button"
-    @click="router.visit(route('faculty.projects'))"
-    class="mt-3 inline-flex items-center text-sm font-medium text-gray-600 transition hover:text-[#0C4B05]"
->
-    ← Back to All Projects
-</button>
+                    <button
+                        v-if="project"
+                        type="button"
+                        @click="router.visit(route('faculty.projects'))"
+                        class="mt-3 inline-flex items-center text-sm font-medium text-gray-600 transition hover:text-[#0C4B05]"
+                    >
+                        ← Back to All Projects
+                    </button>
                 </div>
 
                 <div
@@ -211,10 +230,7 @@ usePoll(2000, {
                         </button>
 
                         <div v-if="isOpen(section.key)" class="mt-5">
-                            <div
-                                v-if="section.documents.length > 0"
-                                class="space-y-5"
-                            >
+                            <div v-if="section.documents.length > 0" class="space-y-5">
                                 <div
                                     v-for="(version, index) in section.documents"
                                     :key="version.id"
@@ -249,14 +265,13 @@ usePoll(2000, {
                                                 </div>
 
                                                 <div class="min-w-0 flex-1">
-                                                    <a
-                                                        :href="resolveDocumentUrl(version)"
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        class="block break-words text-sm font-semibold text-gray-900 hover:text-[#0C4B05] hover:underline"
+                                                    <button
+                                                        type="button"
+                                                        @click="openFileViewer(version)"
+                                                        class="block break-words text-left text-sm font-semibold text-gray-900 hover:text-[#0C4B05] hover:underline"
                                                     >
                                                         {{ version.filename }}
-                                                    </a>
+                                                    </button>
 
                                                     <p class="mt-1 text-xs text-gray-500">
                                                         Uploaded on {{ formatDateTime(version.created_at) }}
@@ -301,6 +316,7 @@ usePoll(2000, {
                                                 v-if="project && version.slug"
                                                 :href="(() => {
                                                     const { folder, document } = parseSubmissionSlug(version.slug)
+
                                                     return route('faculty.submission.show', {
                                                         project: project.slug,
                                                         folder,
@@ -327,8 +343,8 @@ usePoll(2000, {
                                                     v-model="reviewDecision"
                                                     class="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 outline-none"
                                                 >
+                                                    <option value="needs_revision">Request Revision</option>
                                                     <option value="approved">Approve Submission</option>
-                                                    <option value="needs_revision">Request Revisions</option>
                                                 </select>
 
                                                 <button
@@ -355,6 +371,33 @@ usePoll(2000, {
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <div
+                v-if="isFileViewerOpen"
+                class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+            >
+                <div class="flex h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
+                    <div class="flex items-center justify-between border-b px-5 py-3">
+                        <h2 class="truncate text-sm font-semibold text-gray-900">
+                            {{ selectedFileName }}
+                        </h2>
+
+                        <button
+                            type="button"
+                            @click="closeFileViewer"
+                            class="rounded-full p-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-900"
+                        >
+                            <X class="h-5 w-5" />
+                        </button>
+                    </div>
+
+                    <iframe
+                        v-if="selectedFileUrl"
+                        :src="selectedFileUrl"
+                        class="h-full w-full"
+                    ></iframe>
                 </div>
             </div>
         </SidebarInset>

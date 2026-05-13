@@ -49,12 +49,7 @@ const { toggleSection, isOpen } = useSubmissionAccordion(
     documents,
 );
 
-const {
-    showSuccessAlert,
-    showErrorAlert,
-    showInfoAlert,
-    confirmDelete,
-} = useAlerts();
+const { showSuccessAlert, showErrorAlert, showInfoAlert, confirmDelete } = useAlerts();
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 
@@ -194,10 +189,7 @@ function uploadNewFile(section: SectionItem, file: File | null) {
             if (errors.document && String(errors.document).toLowerCase().includes('10')) {
                 setFileTooLargeError(errorKey);
             } else {
-                showErrorAlert(
-                    'Submission Failed',
-                    String(Object.values(errors)[0] || 'Please check your inputs and try again.'),
-                );
+                showErrorAlert('Submission Failed', String(Object.values(errors)[0] || 'Please check your inputs and try again.'));
             }
 
             const input = fileInputs.value[errorKey];
@@ -367,17 +359,12 @@ onMounted(() => {
                         </EmptyHeader>
 
                         <EmptyTitle>No Project Yet</EmptyTitle>
-                        <EmptyDescription>
-                            Create a project first before you can upload or manage submissions.
-                        </EmptyDescription>
+                        <EmptyDescription> Create a project first before you can upload or manage submissions. </EmptyDescription>
                     </Empty>
                 </div>
 
                 <div v-else class="space-y-4">
-                    <div
-                        v-if="isProjectCompleted"
-                        class="rounded-2xl border border-gray-200 bg-gray-50 px-6 py-5 shadow-sm"
-                    >
+                    <div v-if="isProjectCompleted" class="rounded-2xl border border-gray-200 bg-gray-50 px-6 py-5 shadow-sm">
                         <div class="flex items-start gap-3">
                             <div class="rounded-xl bg-white p-2 shadow-sm">
                                 <LockKeyhole class="h-5 w-5 text-gray-600" />
@@ -397,11 +384,7 @@ onMounted(() => {
                         :key="section.key"
                         class="rounded-2xl border border-gray-200 bg-white px-6 py-4 shadow-sm"
                     >
-                        <button
-                            type="button"
-                            @click="toggleSection(section.key)"
-                            class="flex w-full items-center justify-between text-left"
-                        >
+                        <button type="button" @click="toggleSection(section.key)" class="flex w-full items-center justify-between text-left">
                             <h2 class="text-lg font-semibold tracking-wide text-gray-900">
                                 {{ section.label }}
                             </h2>
@@ -414,6 +397,8 @@ onMounted(() => {
 
                         <div v-if="isOpen(section.key)" class="mt-5">
                             <div v-if="canUploadNew(section)" class="mb-5">
+                                <p class="mb-2 text-sm font-semibold text-gray-900">Upload Manuscript</p>
+
                                 <div
                                     role="button"
                                     tabindex="0"
@@ -424,38 +409,16 @@ onMounted(() => {
                                     @dragleave.prevent="setDragState(section.key, false)"
                                     @drop="handleDropUpload($event, section)"
                                     :class="[
-                                        'group flex min-h-[220px] w-full flex-col items-center justify-center rounded-[28px] border border-dashed px-6 py-10 text-center transition-all duration-200',
-                                        isDragging(section.key)
-                                            ? 'border-[#0C4B05] bg-green-50 shadow-sm'
-                                            : 'border-gray-300 bg-[#fafafa] hover:border-[#0C4B05] hover:bg-green-50/40',
-                                        uploadErrors[`new-${section.key}`] ? 'border-red-300 bg-red-50/40' : '',
+                                        'flex min-h-[215px] w-full cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed bg-white px-6 py-10 text-center transition',
+                                        isDragging(section.key) ? 'border-gray-400' : 'border-gray-300 hover:border-gray-400',
+                                        uploadErrors[`new-${section.key}`] ? 'border-red-300' : '',
                                     ]"
                                 >
-                                    <div class="mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-green-50">
-                                        <CloudUpload class="h-10 w-10 text-[#0C4B05]" />
-                                    </div>
+                                    <CloudUpload class="mb-3 h-12 w-12 text-[#0C4B05]" />
 
-                                    <h3 class="text-[18px] font-semibold text-gray-900">
-                                        Upload file
-                                    </h3>
+                                    <p class="text-lg font-medium text-gray-900">Click to upload</p>
 
-                                    <p class="mt-2 text-sm text-gray-500">
-                                        Supported files: PDF
-                                    </p>
-
-                                    <button
-                                        type="button"
-                                        :disabled="isUploading(section.key)"
-                                        @click.stop="triggerFileInput(`new-${section.key}`)"
-                                        class="mt-5 inline-flex min-w-[150px] items-center justify-center gap-2 rounded-md bg-[#0C4B05] px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
-                                    >
-                                        <LoaderCircle
-                                            v-if="isUploading(section.key)"
-                                            class="h-4 w-4 animate-spin"
-                                        />
-
-                                        {{ isUploading(section.key) ? 'Uploading...' : 'Choose PDF' }}
-                                    </button>
+                                    <p class="mt-1 text-base text-slate-500">PDF · Max 10MB</p>
                                 </div>
 
                                 <p
@@ -472,6 +435,19 @@ onMounted(() => {
                                     :ref="(el) => (fileInputs[`new-${section.key}`] = el as HTMLInputElement | null)"
                                     @change="(e) => handleNewUploadChange(e, section)"
                                 />
+
+                                <div class="mt-8 flex justify-end">
+                                    <button
+                                        type="button"
+                                        :disabled="isUploading(section.key)"
+                                        @click="triggerFileInput(`new-${section.key}`)"
+                                        class="inline-flex min-w-[130px] items-center justify-center gap-2 rounded-lg bg-[#0C4B05] px-6 py-3 text-base font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
+                                    >
+                                        <LoaderCircle v-if="isUploading(section.key)" class="h-4 w-4 animate-spin" />
+
+                                        {{ isUploading(section.key) ? 'Uploading...' : 'Submit' }}
+                                    </button>
+                                </div>
                             </div>
 
                             <div
@@ -482,23 +458,15 @@ onMounted(() => {
                             </div>
 
                             <div v-if="section.documents.length > 0" class="space-y-5">
-                                <div
-                                    v-for="(doc, index) in section.documents"
-                                    :key="doc.id"
-                                >
+                                <div v-for="(doc, index) in section.documents" :key="doc.id">
                                     <div class="rounded-2xl border border-gray-200 bg-white p-5 transition hover:shadow-sm">
                                         <div class="flex flex-wrap items-center justify-between gap-2">
                                             <div class="flex items-center gap-2">
-                                                <span class="text-sm font-medium text-gray-900">
-                                                    Version {{ index + 1 }}
-                                                </span>
+                                                <span class="text-sm font-medium text-gray-900"> Version {{ index + 1 }} </span>
 
                                                 <span
                                                     v-if="doc.status"
-                                                    :class="[
-                                                        'rounded-full px-3 py-1 text-xs font-medium capitalize',
-                                                        statusClasses(doc.status),
-                                                    ]"
+                                                    :class="['rounded-full px-3 py-1 text-xs font-medium capitalize', statusClasses(doc.status)]"
                                                 >
                                                     {{ statusLabel(doc.status) }}
                                                 </span>
@@ -527,22 +495,15 @@ onMounted(() => {
                                                         {{ doc.filename }}
                                                     </p>
 
-                                                    <p class="mt-1 text-xs text-gray-500">
-                                                        Uploaded on {{ formatDateTime(doc.created_at) }}
-                                                    </p>
+                                                    <p class="mt-1 text-xs text-gray-500">Uploaded on {{ formatDateTime(doc.created_at) }}</p>
                                                 </div>
                                             </div>
                                         </div>
 
                                         <div class="mt-4 border-t border-gray-200 pt-3">
-                                            <p class="text-xs font-medium uppercase tracking-wide text-gray-500">
-                                                Comments
-                                            </p>
+                                            <p class="text-xs font-medium uppercase tracking-wide text-gray-500">Comments</p>
 
-                                            <div
-                                                v-if="doc.comments?.length && doc.comments[0]?.comment?.trim()"
-                                                class="mt-2"
-                                            >
+                                            <div v-if="doc.comments?.length && doc.comments[0]?.comment?.trim()" class="mt-2">
                                                 <p class="text-sm leading-relaxed text-gray-700">
                                                     {{ doc.comments[0].comment }}
                                                 </p>
@@ -570,10 +531,7 @@ onMounted(() => {
                                                 @click="triggerFileInput(doc.id)"
                                                 class="inline-flex min-w-[140px] items-center justify-center gap-2 rounded-md bg-[#0C4B05] px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
                                             >
-                                                <LoaderCircle
-                                                    v-if="isUploading(doc.id)"
-                                                    class="h-4 w-4 animate-spin"
-                                                />
+                                                <LoaderCircle v-if="isUploading(doc.id)" class="h-4 w-4 animate-spin" />
 
                                                 {{ isUploading(doc.id) ? 'Uploading...' : 'Resubmit' }}
                                             </button>
@@ -623,20 +581,10 @@ onMounted(() => {
                                 </div>
                             </div>
 
-                            <div
-                                v-else
-                                class="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center"
-                            >
-                                <p class="text-sm text-gray-500">
-                                    No file submitted for {{ section.label }}
-                                </p>
+                            <div v-else class="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center">
+                                <p class="text-sm text-gray-500">No file submitted for {{ section.label }}</p>
 
-                                <p
-                                    v-if="isProjectCompleted"
-                                    class="mt-1 text-xs text-gray-400"
-                                >
-                                    Submissions are closed.
-                                </p>
+                                <p v-if="isProjectCompleted" class="mt-1 text-xs text-gray-400">Submissions are closed.</p>
                             </div>
                         </div>
                     </div>

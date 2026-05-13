@@ -5,35 +5,42 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Separator } from '@/components/ui/separator';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { useAlerts } from '@/composables/useAlerts';
-import { useDateFormatter } from '@/composables/useDateFormatter';
 import { Head, router } from '@inertiajs/vue3';
 import { FileText } from 'lucide-vue-next';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 
 type Manuscript = {
     id: number;
     title: string;
     filename: string;
     original_filename?: string | null;
-    abstract: string;
+    abstract?: string | null;
     project_title: string | null;
     adviser: string | null;
+    panelists: string[];
     researchers: string[];
     created_at: string;
     status?: string | null;
+    revision_comment?: string | null;
 };
 
 const props = defineProps<{
     manuscripts: Manuscript[];
 }>();
 
-const approvingId = ref<number | null>(null);
-const successMessage = ref<string | null>(null);
-const showModal = ref(false);
+const { showSuccessAlert, showErrorAlert } = useAlerts();
+
+const processingId = ref<number | null>(null);
+const showDetailsModal = ref(false);
+const showReviewModal = ref(false);
 const selectedPaper = ref<Manuscript | null>(null);
 
-const { formatDateTime } = useDateFormatter();
-const { confirmAction, showSuccessAlert, showErrorAlert } = useAlerts();
+const decision = ref<'approve' | 'revise'>('approve');
+const revisionComment = ref('');
+
+const commentError = computed(() => {
+    return decision.value === 'revise' && revisionComment.value.trim() === '';
+});
 
 function shortTitle(title: string, limit = 55) {
     if (!title) return '';
@@ -49,76 +56,131 @@ function shortTitle(title: string, limit = 55) {
     return capitalized.length > limit ? `${capitalized.slice(0, limit).trim()}...` : capitalized;
 }
 
-function cleanFileName(filename: string | null | undefined): string {
-    if (!filename) return '';
-    return filename.replace(/^\d+_/, '');
+function normalizeStatus(status?: string | null) {
+    return String(status ?? '')
+        .toLowerCase()
+        .trim();
 }
 
-function getAbstractParagraphs(abstractText: string | null | undefined): string[] {
-    if (!abstractText || !abstractText.trim()) {
-        return ['No abstract available.'];
+function statusLabel(status?: string | null) {
+    const normalized = normalizeStatus(status);
+
+    if (['approved', 'approve', 'accepted', 'accept'].includes(normalized)) {
+        return 'Approved';
     }
 
-    return abstractText
-        .split(/\n\s*\n/)
-        .map((paragraph) => paragraph.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim())
-        .filter((paragraph) => paragraph.length > 0);
+    if (['revision', 'request_revision', 'requested_revision', 'revise'].includes(normalized)) {
+        return 'Request for Revision';
+    }
+
+    if (normalized === 'resubmitted') {
+        return 'Resubmitted';
+    }
+
+    if (['pending', 'submitted', 'for_review'].includes(normalized)) {
+        return 'For Review';
+    }
+
+    return 'N/A';
 }
 
 function isApproved(paper: Manuscript): boolean {
-    return paper.status === 'approved';
+    return ['approved', 'approve', 'accepted', 'accept'].includes(normalizeStatus(paper.status));
 }
 
-function closeModal() {
-    showModal.value = false;
+function isRevision(paper: Manuscript): boolean {
+    return ['revision', 'request_revision', 'requested_revision', 'revise'].includes(normalizeStatus(paper.status));
+}
+
+function isReviewable(paper: Manuscript): boolean {
+    const status = normalizeStatus(paper.status);
+
+    if (isApproved(paper)) return false;
+    if (isRevision(paper)) return false;
+
+    return ['pending', 'submitted', 'resubmitted', 'for_review'].includes(status);
+}
+
+function manuscriptViewUrl(paper: Manuscript) {
+    return route('departmentchair.manuscript.view', { id: paper.id });
+}
+
+function openDetailsModal(paper: Manuscript) {
+    selectedPaper.value = paper;
+    showDetailsModal.value = true;
+    document.body.style.overflow = 'hidden';
+}
+
+function closeDetailsModal() {
+    showDetailsModal.value = false;
     selectedPaper.value = null;
     document.body.style.overflow = '';
 }
 
-function openModal(paper: Manuscript) {
+function openReviewModal(paper: Manuscript) {
+    if (!isReviewable(paper)) return;
+
     selectedPaper.value = paper;
-    showModal.value = true;
+    decision.value = 'approve';
+    revisionComment.value = '';
+    showReviewModal.value = true;
     document.body.style.overflow = 'hidden';
 }
 
-async function approve(id: number) {
-    const result = await confirmAction('Are you sure you want to approve?', 'This action will approve the manuscript.', 'Yes, approve it', 'Cancel');
+function closeReviewModal() {
+    showReviewModal.value = false;
+    selectedPaper.value = null;
+    decision.value = 'approve';
+    revisionComment.value = '';
+    document.body.style.overflow = '';
+}
 
-    if (!result.isConfirmed) return;
+function submitReview() {
+    if (!selectedPaper.value) return;
 
-    approvingId.value = id;
+    if (commentError.value) {
+        showErrorAlert('Comment Required', 'Please add a comment when requesting revision.');
+        return;
+    }
+
+    const id = selectedPaper.value.id;
+    const selectedDecision = decision.value;
+
+    processingId.value = id;
 
     router.post(
-        route('departmentchair.manuscript.approve', { id }),
-        {},
+        route('departmentchair.manuscript.review', { id }),
+        {
+            decision: selectedDecision,
+            revision_comment: revisionComment.value.trim(),
+        },
         {
             preserveScroll: true,
-            preserveState: true,
+            preserveState: false,
+
             onSuccess: async () => {
-                const paper = props.manuscripts.find((item) => item.id === id);
+                await showSuccessAlert(
+                    selectedDecision === 'approve' ? 'Approved' : 'Revision Requested',
+                    selectedDecision === 'approve'
+                        ? 'The manuscript has been approved successfully.'
+                        : 'The manuscript has been requested for revision.',
+                );
 
-                if (paper) {
-                    paper.status = 'approved';
-                }
+                closeReviewModal();
 
-                if (selectedPaper.value?.id === id) {
-                    selectedPaper.value.status = 'approved';
-                }
-
-                successMessage.value = 'Manuscript approved successfully.';
-                await showSuccessAlert('Approved', 'The manuscript has been approved successfully.');
-
-                router.reload({ only: ['manuscripts'] });
+                router.reload({
+                    only: ['manuscripts'],
+                    preserveScroll: true,
+                    preserveState: false,
+                });
             },
+
             onError: async () => {
-                await showErrorAlert('Error', 'Something went wrong while approving the manuscript.');
+                await showErrorAlert('Error', 'Something went wrong while reviewing the manuscript.');
             },
-            onFinish: () => {
-                approvingId.value = null;
 
-                setTimeout(() => {
-                    successMessage.value = null;
-                }, 3000);
+            onFinish: () => {
+                processingId.value = null;
             },
         },
     );
@@ -145,16 +207,8 @@ async function approve(id: number) {
 
             <div class="space-y-6 p-6">
                 <div class="rounded-xl border border-gray-200 bg-white px-6 py-5 shadow-sm">
-                    <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                        <div>
-                            <h1 class="text-2xl font-bold text-gray-900">Manuscripts</h1>
-                            <p class="mt-1 text-sm text-gray-500">List of submitted research manuscripts.</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div v-if="successMessage" class="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-700">
-                    {{ successMessage }}
+                    <h1 class="text-2xl font-bold text-gray-900">Manuscripts</h1>
+                    <p class="mt-1 text-sm text-gray-500">List of submitted and resubmitted research manuscripts.</p>
                 </div>
 
                 <div v-if="props.manuscripts.length === 0" class="flex min-h-[60vh] items-center justify-center">
@@ -166,179 +220,211 @@ async function approve(id: number) {
                         </EmptyHeader>
 
                         <EmptyTitle>No Manuscripts Found</EmptyTitle>
-                        <EmptyDescription> Once manuscripts are submitted, they will appear here. </EmptyDescription>
-
+                        <EmptyDescription>Once manuscripts are submitted, they will appear here.</EmptyDescription>
                         <EmptyContent />
                     </Empty>
                 </div>
 
-                <div v-else class="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
+                <div v-else class="grid grid-cols-1 items-stretch gap-6 sm:grid-cols-2 xl:grid-cols-3">
                     <div
                         v-for="paper in props.manuscripts"
                         :key="paper.id"
                         class="flex h-full flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-md"
                     >
                         <div class="border-b border-gray-100 bg-gradient-to-r from-[#0C4B05] to-[#146b0c] px-5 py-4">
-                            <div class="flex items-start justify-between gap-3">
-                                <div class="min-w-0">
-                                    <p class="mb-1 text-xs font-semibold tracking-wider text-white/80">Research Manuscript</p>
-                                    <h2 class="line-clamp-2 min-h-[3.5rem] text-lg font-bold leading-snug text-white" :title="paper.title">
-                                        {{ shortTitle(paper.title) }}
-                                    </h2>
-                                </div>
-                            </div>
+                            <p class="mb-1 text-xs font-semibold tracking-wider text-white/80">Research Manuscript</p>
+
+                            <h2 class="line-clamp-2 min-h-[3.5rem] text-lg font-bold leading-snug text-white">
+                                {{ shortTitle(paper.title) }}
+                            </h2>
                         </div>
 
                         <div class="flex flex-1 flex-col p-5">
                             <div class="space-y-3">
-                                <div class="flex justify-between">
-                                    <span class="text-sm text-gray-500">File</span>
-                                    <a
-                                        :href="route('departmentchair.manuscript.view', { id: paper.id })"
-                                        target="_blank"
-                                        class="max-w-[60%] break-words text-right text-sm font-semibold text-green-700 hover:underline"
-                                    >
-                                        {{ cleanFileName(paper.original_filename ?? paper.filename) }}
-                                    </a>
+                                <div class="flex items-start justify-between gap-3">
+                                    <span class="shrink-0 text-sm text-gray-500">Researchers</span>
                                 </div>
 
                                 <div class="flex items-start justify-between gap-3">
-                                    <span class="text-sm font-medium text-gray-500">Adviser</span>
-                                    <span class="text-right text-sm font-semibold text-gray-900">
-                                        {{ paper.adviser ?? 'N/A' }}
-                                    </span>
+                                    <span class="shrink-0 text-sm font-medium text-gray-500">Adviser</span>
+
+                                    <div class="max-w-[60%] text-right text-sm font-semibold text-gray-900">
+                                        <p>{{ paper.adviser ?? 'N/A' }}</p>
+                                    </div>
+                                </div>
+
+                                <div class="flex items-start justify-between gap-3">
+                                    <span class="shrink-0 text-sm font-medium text-gray-500">Status</span>
+
+                                    <div class="max-w-[60%] text-right text-sm font-semibold text-gray-900">
+                                        <p class="text-xs font-normal text-gray-500">
+                                            {{ statusLabel(paper.status) }}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div v-if="isRevision(paper) && paper.revision_comment" class="pt-2">
+                                    <p
+                                        class="line-clamp-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs leading-relaxed text-gray-600"
+                                    >
+                                        {{ paper.revision_comment }}
+                                    </p>
                                 </div>
                             </div>
 
-                            <div v-if="paper.researchers?.length" class="mt-5 pt-4"></div>
+                            <div class="mt-auto grid grid-cols-1 gap-3 pt-8" :class="isReviewable(paper) ? 'sm:grid-cols-2' : ''">
+                                <button
+                                    type="button"
+                                    class="flex h-11 w-full items-center justify-center rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+                                    @click="openDetailsModal(paper)"
+                                >
+                                    View
+                                </button>
 
-                            <div class="mt-5 pt-4">
-                                <div v-if="isApproved(paper)">
-                                    <button
-                                        type="button"
-                                        class="flex h-11 w-full items-center justify-center rounded-md border border-gray-300 bg-white px-4 text-sm font-medium text-gray-700 transition hover:bg-gray-50 focus:ring-gray-300"
-                                        @click="openModal(paper)"
-                                    >
-                                        View Details
-                                    </button>
-                                </div>
-
-                                <div v-else class="grid grid-cols-2 gap-2">
-                                    <button
-                                        type="button"
-                                        class="flex h-11 w-full items-center justify-center rounded-md border border-gray-300 bg-white px-4 text-sm font-medium text-gray-700 transition hover:bg-gray-50 focus:ring-gray-300"
-                                        @click="openModal(paper)"
-                                    >
-                                        View Details
-                                    </button>
-
-                                    <button
-                                        type="button"
-                                        class="rounded-md bg-[#0C4B05] px-4 py-2 text-sm text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
-                                        :disabled="approvingId === paper.id"
-                                        @click="approve(paper.id)"
-                                    >
-                                        <span v-if="approvingId === paper.id">Processing...</span>
-                                        <span v-else>Approve</span>
-                                    </button>
-                                </div>
+                                <button
+                                    v-if="isReviewable(paper)"
+                                    type="button"
+                                    class="flex h-11 w-full items-center justify-center rounded-lg bg-[#0C4B05] px-4 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
+                                    :disabled="processingId === paper.id"
+                                    @click="openReviewModal(paper)"
+                                >
+                                    <span v-if="processingId === paper.id">Processing...</span>
+                                    <span v-else>Review</span>
+                                </button>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
+        </SidebarInset>
 
-            <teleport to="body">
-                <div
-                    v-if="showModal"
-                    class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 px-4 pb-6 pt-14 backdrop-blur-sm"
-                    @click.self="closeModal"
-                >
-                    <div class="w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/5">
-                        <div class="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-                            <div>
-                                <h2 class="text-xl font-bold text-[#0C4B05]">Manuscript Details</h2>
-                                <p class="mt-1 text-sm text-gray-500">Review the submitted manuscript information below.</p>
+        <teleport to="body">
+            <div
+                v-if="showDetailsModal"
+                class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6 backdrop-blur-sm"
+                @click.self="closeDetailsModal"
+            >
+                <div class="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+                    <div class="flex items-start justify-between gap-4 border-b border-gray-100 px-5 py-4">
+                        <h2 class="text-lg font-bold text-[#0C4B05]">Manuscript</h2>
+
+                        <button
+                            type="button"
+                            @click="closeDetailsModal"
+                            class="flex h-9 w-9 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+                        >
+                            ✕
+                        </button>
+                    </div>
+
+                    <template v-if="selectedPaper">
+                        <div class="min-h-0 flex-1 bg-gray-100 p-3">
+                            <div class="h-full overflow-hidden rounded-xl border border-gray-200 bg-white">
+                                <iframe :src="manuscriptViewUrl(selectedPaper)" class="h-[70vh] w-full" frameborder="0"></iframe>
                             </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </teleport>
 
-                            <button
-                                type="button"
-                                @click="closeModal"
-                                class="flex h-10 w-10 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
-                            >
-                                ✕
-                            </button>
+        <teleport to="body">
+            <div
+                v-if="showReviewModal"
+                class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6 backdrop-blur-sm"
+                @click.self="closeReviewModal"
+            >
+                <div class="w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-xl">
+                    <div class="flex items-start justify-between gap-4 border-b border-gray-100 px-6 py-5">
+                        <h2 class="text-lg font-bold text-gray-900">Review Manuscript</h2>
+
+                        <button
+                            type="button"
+                            class="inline-flex h-9 w-9 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+                            @click="closeReviewModal"
+                        >
+                            ✕
+                        </button>
+                    </div>
+
+                    <div v-if="selectedPaper" class="space-y-5 px-6 py-5">
+                        <div class="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+                            <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Manuscript Title</p>
+                            <p class="mt-1 text-sm font-semibold leading-6 text-gray-900">
+                                {{ selectedPaper.title }}
+                            </p>
+
+                            <p class="mt-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Current Status</p>
+                            <p class="mt-1 text-sm font-semibold text-gray-900">
+                                {{ statusLabel(selectedPaper.status) }}
+                            </p>
                         </div>
 
-                        <template v-if="selectedPaper">
-                            <div class="px-6 py-5">
-                                <div class="mb-4 flex items-center justify-between">
-                                    <div>
-                                        <h3 class="text-base font-semibold text-gray-900">Review Summary</h3>
-                                        <p class="mt-1 text-sm text-gray-500">
-                                            Viewing details will not approve this manuscript. Click the Approve button to approve it.
-                                        </p>
-                                    </div>
+                        <div>
+                            <label class="mb-2 block text-sm font-semibold text-gray-800"> Decision </label>
 
-                                    <span
-                                        v-if="isApproved(selectedPaper)"
-                                        class="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700"
-                                    >
-                                        Approved
-                                    </span>
+                            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <button
+                                    type="button"
+                                    class="flex items-center justify-center rounded-xl border px-4 py-3 text-sm font-semibold transition"
+                                    :class="
+                                        decision === 'approve'
+                                            ? 'border-[#0C4B05] bg-[#0C4B05]/10 text-[#0C4B05] ring-2 ring-[#0C4B05]/15'
+                                            : 'border-gray-200 bg-white text-gray-700 hover:border-[#0C4B05]/40 hover:bg-gray-50'
+                                    "
+                                    @click="decision = 'approve'"
+                                >
+                                    Approve Manuscript
+                                </button>
 
-                                    <span v-else class="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700"> Pending </span>
-                                </div>
-
-                                <div class="rounded-2xl border border-gray-200 bg-gray-50 p-5">
-                                    <div class="mb-4">
-                                        <h3 class="text-sm font-semibold text-gray-800">Manuscript Overview</h3>
-                                        <p class="mt-1 text-sm text-gray-600">Selected manuscript details.</p>
-                                    </div>
-
-                                    <div class="space-y-3 text-sm text-gray-700">
-                                        <div class="rounded-xl border border-gray-200 bg-white px-4 py-3">
-                                            <span class="block text-xs font-semibold uppercase tracking-wide text-gray-500"> Title </span>
-                                            <p class="mt-1 font-medium leading-relaxed text-gray-800">
-                                                {{ selectedPaper.title || 'Untitled Manuscript' }}
-                                            </p>
-                                        </div>
-
-                                        <div class="rounded-xl border border-gray-200 bg-white px-4 py-3">
-                                            <span class="block text-xs font-semibold uppercase tracking-wide text-gray-500"> Researchers </span>
-
-                                            <ul v-if="selectedPaper.researchers?.length" class="mt-2 list-disc space-y-1 pl-5 text-gray-800">
-                                                <li v-for="(researcher, index) in selectedPaper.researchers" :key="index">
-                                                    {{ researcher }}
-                                                </li>
-                                            </ul>
-
-                                            <p v-else class="mt-1 font-medium text-gray-500">No researchers available.</p>
-                                        </div>
-
-                                        <div class="rounded-xl border border-gray-200 bg-white px-4 py-3">
-                                            <span class="block text-xs font-semibold uppercase tracking-wide text-gray-500"> Abstract </span>
-
-                                            <div class="mt-2 space-y-3">
-                                                <p
-                                                    v-for="(paragraph, index) in getAbstractParagraphs(selectedPaper.abstract)"
-                                                    :key="index"
-                                                    class="text-justify leading-7 text-gray-800"
-                                                    style="text-justify: inter-word"
-                                                >
-                                                    {{ paragraph }}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                               
+                                <button
+                                    type="button"
+                                    class="flex items-center justify-center rounded-xl border px-4 py-3 text-sm font-semibold transition"
+                                    :class="
+                                        decision === 'revise'
+                                            ? 'border-yellow-500 bg-yellow-50 text-yellow-700 ring-2 ring-yellow-500/15'
+                                            : 'border-gray-200 bg-white text-gray-700 hover:border-yellow-400 hover:bg-gray-50'
+                                    "
+                                    @click="decision = 'revise'"
+                                >
+                                    Request Revision
+                                </button>
                             </div>
-                        </template>
+                        </div>
+
+                        <div>
+                            <div class="mb-2 flex items-center justify-between">
+                                <label class="block text-sm font-semibold text-gray-800">
+                                    Comments
+                                    <span v-if="decision === 'revise'" class="text-red-500">*</span>
+                                </label>
+
+                                <span class="text-xs text-gray-400"> Required for revision </span>
+                            </div>
+
+                            <textarea
+                                v-model="revisionComment"
+                                rows="5"
+                                class="w-full resize-none rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-[#0C4B05] focus:ring-2 focus:ring-[#0C4B05]/20"
+                                placeholder="Write your comments here..."
+                            ></textarea>
+
+                            <p v-if="commentError" class="mt-2 text-xs font-medium text-red-600">Comments are required when requesting revision.</p>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col-reverse gap-3 border-t border-gray-100 bg-gray-50 px-6 py-4 sm:flex-row sm:justify-end">
+                        <button
+                            type="button"
+                            class="inline-flex h-11 items-center justify-center rounded-xl bg-[#0C4B05] px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-[#083804] disabled:cursor-not-allowed disabled:opacity-60"
+                            :disabled="processingId === selectedPaper?.id || commentError"
+                            @click="submitReview"
+                        >
+                            <span v-if="processingId === selectedPaper?.id">Submitting...</span>
+                            <span v-else>Submit Review</span>
+                        </button>
                     </div>
                 </div>
-            </teleport>
-        </SidebarInset>
+            </div>
+        </teleport>
     </SidebarProvider>
 </template>

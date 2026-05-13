@@ -25,10 +25,25 @@ class Project extends Model
         'slug',
         'description',
         'completed_at',
+
+        'proposal_titles',
+        'proposal_file',
+        'proposal_files',
+        'proposal_original_name',
+        'proposal_original_names',
+        'approved_proposal_index',
+
+        'is_resubmitted',
+        'resubmitted_at',
     ];
 
     protected $casts = [
         'completed_at' => 'datetime',
+        'proposal_titles' => 'array',
+        'proposal_files' => 'array',
+        'proposal_original_names' => 'array',
+        'is_resubmitted' => 'boolean',
+        'resubmitted_at' => 'datetime',
     ];
 
     protected static function booted()
@@ -129,14 +144,13 @@ class Project extends Model
 
     public function schedule()
     {
-        return $this->hasOne(\App\Models\Schedule::class);
+        return $this->hasOne(Schedule::class);
     }
 
-   public function manuscript()
+    public function manuscript()
     {
         return $this->hasOne(ProjectManuscript::class, 'project_id')->withTrashed();
     }
-
 
     public function isApproved()
     {
@@ -146,5 +160,39 @@ class Project extends Model
     public function isCompleted(): bool
     {
         return strtolower((string) $this->status) === 'completed' || !is_null($this->completed_at);
+    }
+
+    public function proposalVotes()
+    {
+        return $this->hasMany(ProjectProposalVote::class);
+    }
+
+    public function facultyVotes()
+    {
+        return $this->belongsToMany(
+            User::class,
+            'project_proposal_votes',
+            'project_id',
+            'faculty_id'
+        )->withPivot('proposal_index')
+            ->withTimestamps();
+    }
+
+    public function preferredAdvisers()
+    {
+        return $this->belongsToMany(
+            User::class,
+            'project_preferred_advisers',
+            'project_id',
+            'adviser_id'
+        )
+            ->withPivot([
+                'preference_order',
+                'status',
+                'is_shared',
+                'shared_at',
+            ])
+            ->withTimestamps()
+            ->orderBy('project_preferred_advisers.preference_order');
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Student;
 
+use App\Models\Project;
 use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
@@ -17,24 +18,63 @@ class StoreProjectRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $researchers = $this->input('researchers', []);
+        $titles = $this->input('proposal_titles', []);
+        $preferredAdvisers = $this->input('preferred_adviser_ids', []);
 
         if (! is_array($researchers)) {
             $researchers = [];
         }
 
-        $adviserId = $this->sanitizeInteger($this->input('adviser_id'));
+        if (! is_array($titles)) {
+            $titles = [];
+        }
+
+        if (! is_array($preferredAdvisers)) {
+            $preferredAdvisers = [];
+        }
 
         $this->merge([
-            'title' => $this->sanitizeTitle($this->input('title')),
+            'proposal_titles' => array_map(fn ($title) => $this->sanitizeTitle($title), $titles),
             'researchers' => $this->sanitizeIdArray($researchers),
-            'adviser_id' => $adviserId,
+            'preferred_adviser_ids' => $this->sanitizeIdArray($preferredAdvisers),
         ]);
     }
 
     public function rules(): array
     {
         return [
-            'title' => ['bail', 'required', 'string', 'min:5', 'max:200'],
+            'proposal_titles' => ['required', 'array', 'size:3'],
+
+            'proposal_titles.*' => [
+                'bail',
+                'required',
+                'string',
+                'min:5',
+                'max:200',
+                'distinct',
+                function ($attribute, $value, $fail) {
+                    $normalizedTitle = Str::of((string) $value)
+                        ->lower()
+                        ->squish()
+                        ->toString();
+
+                    $exists = Project::withTrashed()
+                        ->whereRaw('LOWER(TRIM(title)) = ?', [$normalizedTitle])
+                        ->exists();
+
+                    if ($exists) {
+                        $fail('This proposal title already exists.');
+                    }
+                },
+            ],
+
+            'proposal_files' => ['required', 'array', 'size:3'],
+
+            'proposal_files.*' => [
+                'required',
+                'file',
+                'mimes:pdf,doc,docx',
+            ],
 
             'researchers' => ['nullable', 'array', 'max:4'],
 
@@ -57,9 +97,12 @@ class StoreProjectRequest extends FormRequest
                 },
             ],
 
-            'adviser_id' => [
-                'required',
+            'preferred_adviser_ids' => ['required', 'array', 'size:3'],
+
+            'preferred_adviser_ids.*' => [
+                'bail',
                 'integer',
+                'distinct',
                 'exists:users,id',
                 function ($attribute, $value, $fail) {
                     $user = User::with('roles')->find($value);
@@ -76,13 +119,6 @@ class StoreProjectRequest extends FormRequest
 
                     if ($user->roles->contains('name', 'Administrator')) {
                         $fail('Administrator cannot be selected as adviser.');
-                        return;
-                    }
-
-                    $researchers = array_map('intval', $this->input('researchers', []));
-
-                    if (in_array((int) $value, $researchers, true)) {
-                        $fail('Adviser cannot also be a researcher.');
                     }
                 },
             ],
@@ -92,30 +128,25 @@ class StoreProjectRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'title.required' => 'Project title is required.',
-            'title.min' => 'Project title must be at least 5 characters.',
-            'title.max' => 'Project title cannot exceed 200 characters.',
+            'proposal_titles.required' => 'Please enter 3 proposal titles.',
+            'proposal_titles.size' => 'Exactly 3 proposal titles are required.',
+            'proposal_titles.*.required' => 'Each proposal title is required.',
+            'proposal_titles.*.min' => 'Each proposal title must be at least 5 characters.',
+            'proposal_titles.*.max' => 'Each proposal title cannot exceed 200 characters.',
+            'proposal_titles.*.distinct' => 'Proposal titles must be different.',
 
-            'researchers.array' => 'Researchers must be a valid list.',
+            'proposal_files.required' => 'Please upload one file for each proposal title.',
+            'proposal_files.size' => 'Exactly 3 proposal files are required.',
+            'proposal_files.*.required' => 'Each proposal title must have a proposal file.',
+            'proposal_files.*.mimes' => 'Each proposal file must be PDF, DOC, or DOCX.',
+
             'researchers.max' => 'You can only add up to 4 researchers.',
 
-            'researchers.*.integer' => 'One of the selected researchers is invalid.',
-            'researchers.*.distinct' => 'Duplicate researcher selected.',
-            'researchers.*.exists' => 'One of the selected researchers does not exist.',
-
-            'adviser_id.required' => 'Adviser is required.',
-            'adviser_id.integer' => 'Selected adviser is invalid.',
-            'adviser_id.exists' => 'Selected adviser does not exist.',
+            'preferred_adviser_ids.required' => 'Please select 3 preferred advisers.',
+            'preferred_adviser_ids.size' => 'Exactly 3 preferred advisers are required.',
+            'preferred_adviser_ids.*.distinct' => 'Preferred advisers must be different.',
+            'preferred_adviser_ids.*.exists' => 'Selected adviser does not exist.',
         ];
-    }
-
-    protected function passedValidation(): void
-    {
-        $this->replace([
-            'title' => $this->sanitizeTitle($this->input('title')),
-            'researchers' => $this->sanitizeIdArray($this->input('researchers', [])),
-            'adviser_id' => $this->sanitizeInteger($this->input('adviser_id')),
-        ]);
     }
 
     private function sanitizeTitle(mixed $value): string
@@ -150,5 +181,3 @@ class StoreProjectRequest extends FormRequest
         }, $values), fn ($value) => $value !== null)));
     }
 }
-
-

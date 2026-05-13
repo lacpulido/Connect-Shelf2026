@@ -14,6 +14,53 @@ use Illuminate\Support\Facades\Storage;
 
 class FinalManuscriptReviewController extends Controller
 {
+    public function review(Request $request, int $id): RedirectResponse
+    {
+        $validated = $request->validate([
+            'decision' => ['required', 'in:approve,revise'],
+            'revision_comment' => ['nullable', 'string', 'max:5000', 'required_if:decision,revise'],
+        ]);
+
+        if ($validated['decision'] === 'approve') {
+            return $this->approve($id);
+        }
+
+        DB::beginTransaction();
+
+        try {
+            $manuscript = ProjectManuscript::findOrFail($id);
+
+            if ($manuscript->status === 'approved') {
+                DB::rollBack();
+
+                return back()->with('error', 'Approved manuscript cannot be requested for revision.');
+            }
+
+            $updated = ProjectManuscript::where('id', $id)->update([
+                'status' => 'request_revision',
+                'revision_comment' => $validated['revision_comment'],
+                'updated_at' => now(),
+            ]);
+
+            if (! $updated) {
+                throw new \Exception('Failed to update manuscript revision status.');
+            }
+
+            DB::commit();
+
+            return back()->with('success', 'Revision requested successfully.');
+        } catch (\Throwable $e) {
+            DB::rollBack();
+
+            Log::error('Final manuscript revision request failed.', [
+                'manuscript_id' => $id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return back()->with('error', 'Failed: ' . $e->getMessage());
+        }
+    }
+
     public function approve(int $id): RedirectResponse
     {
         DB::beginTransaction();
@@ -27,9 +74,9 @@ class FinalManuscriptReviewController extends Controller
                 return back()->with('info', 'Manuscript has already been approved.');
             }
 
-            // Direct DB update para siguradong masasave
             $updated = ProjectManuscript::where('id', $id)->update([
-                'status'     => 'approved',
+                'status' => 'approved',
+                'revision_comment' => null,
                 'updated_at' => now(),
             ]);
 
@@ -37,7 +84,6 @@ class FinalManuscriptReviewController extends Controller
                 throw new \Exception('Failed to update manuscript status.');
             }
 
-            // Re-fetch from database to verify
             $manuscript = ProjectManuscript::findOrFail($id);
 
             if ($manuscript->status !== 'approved') {
@@ -89,7 +135,7 @@ class FinalManuscriptReviewController extends Controller
         $adviserId = $project->adviser_id;
 
         $project->update([
-            'status'       => 'Completed',
+            'status' => 'Completed',
             'completed_at' => now(),
         ]);
 

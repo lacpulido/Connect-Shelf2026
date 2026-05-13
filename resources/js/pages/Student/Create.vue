@@ -26,9 +26,19 @@ type SearchUser = {
     department_id?: number | null
 }
 
+type Faculty = {
+    id: number
+    name: string
+    email: string
+    department_id?: number | null
+    department_name?: string | null
+    adviser_is_visible?: boolean
+}
+
 const props = defineProps<{
     colleges: Array<{ id: number; name: string }>
     departments: Array<{ id: number; name: string; college_id: number }>
+    faculty: Faculty[]
     authUser: {
         college_id: number
         department_id: number
@@ -38,16 +48,12 @@ const props = defineProps<{
 const { showSuccessAlert, showErrorAlert } = useAlerts()
 
 const isSaving = ref(false)
-
 const searchQuery = ref('')
 const searchResults = ref<SearchUser[]>([])
 const isSearching = ref(false)
-let timeout: ReturnType<typeof setTimeout> | null = null
+const selectedAdviserId = ref<number | ''>('')
 
-const adviserQuery = ref('')
-const adviserResults = ref<SearchUser[]>([])
-const isSearchingAdviser = ref(false)
-let adviserTimeout: ReturnType<typeof setTimeout> | null = null
+let timeout: ReturnType<typeof setTimeout> | null = null
 
 const getCurrentAcademicYear = () => {
     const now = new Date()
@@ -102,10 +108,36 @@ const displayProjectType = computed(() => {
 })
 
 const form = useForm({
-    title: '',
-    researchers: [] as Array<{ id: number; name: string; email: string }>,
-    adviser: null as null | { id: number; name: string; email: string },
-    adviser_id: null as number | null,
+    proposal_titles: ['', '', ''],
+    proposal_files: [null, null, null] as Array<File | null>,
+
+    researchers: [] as Array<{
+        id: number
+        name: string
+        email: string
+    }>,
+
+    preferred_advisers: [] as Array<{
+        id: number
+        name: string
+        email: string
+    }>,
+
+    preferred_adviser_ids: [] as number[],
+})
+
+const availableFaculty = computed(() => {
+    return props.faculty.filter((faculty) => {
+        const alreadySelected = form.preferred_advisers.find(
+            (adviser) => adviser.id === faculty.id,
+        )
+
+        const isVisible =
+            faculty.adviser_is_visible === undefined ||
+            faculty.adviser_is_visible === true
+
+        return !alreadySelected && isVisible
+    })
 })
 
 watch(searchQuery, (value) => {
@@ -146,41 +178,6 @@ watch(searchQuery, (value) => {
     }, 400)
 })
 
-watch(adviserQuery, (value) => {
-    if (adviserTimeout) clearTimeout(adviserTimeout)
-
-    const keyword = value.trim()
-
-    if (keyword.length < 3) {
-        adviserResults.value = []
-        isSearchingAdviser.value = false
-        return
-    }
-
-    adviserTimeout = setTimeout(async () => {
-        try {
-            isSearchingAdviser.value = true
-
-            const response = await axios.get<SearchUser[]>(
-                route('student.users.search'),
-                {
-                    params: {
-                        q: keyword,
-                        user_type: 1,
-                    },
-                },
-            )
-
-            adviserResults.value = response.data
-        } catch (error) {
-            console.error(error)
-            adviserResults.value = []
-        } finally {
-            isSearchingAdviser.value = false
-        }
-    }, 400)
-})
-
 const addResearcher = (user: SearchUser) => {
     if (form.researchers.length >= 4) return
 
@@ -202,65 +199,106 @@ const removeResearcher = (id: number) => {
     form.researchers = form.researchers.filter((r) => r.id !== id)
 }
 
-const selectAdviser = (user: SearchUser) => {
-    form.adviser = {
-        id: user.id,
-        name: `${user.first_name} ${user.last_name}`,
-        email: user.email,
-    }
+const addAdviserFromDropdown = () => {
+    if (!selectedAdviserId.value) return
+    if (form.preferred_advisers.length >= 3) return
 
-    form.adviser_id = user.id
-    adviserQuery.value = ''
-    adviserResults.value = []
+    const adviser = availableFaculty.value.find(
+        (faculty) => faculty.id === Number(selectedAdviserId.value),
+    )
+
+    if (!adviser) return
+
+    form.preferred_advisers.push({
+        id: adviser.id,
+        name: adviser.name,
+        email: adviser.email,
+    })
+
+    form.preferred_adviser_ids = form.preferred_advisers.map((a) => a.id)
+
+    selectedAdviserId.value = ''
 }
 
-const removeAdviser = () => {
-    form.adviser = null
-    form.adviser_id = null
+const removeAdviser = (id: number) => {
+    form.preferred_advisers = form.preferred_advisers.filter((a) => a.id !== id)
+    form.preferred_adviser_ids = form.preferred_advisers.map((a) => a.id)
+}
+
+const handleProposalFile = (event: Event, index: number) => {
+    const input = event.target as HTMLInputElement
+    form.proposal_files[index] = input.files?.[0] ?? null
 }
 
 const resetFormState = () => {
     form.reset()
+    form.clearErrors()
+
+    form.proposal_titles = ['', '', '']
+    form.proposal_files = [null, null, null]
     form.researchers = []
-    form.adviser = null
-    form.adviser_id = null
+    form.preferred_advisers = []
+    form.preferred_adviser_ids = []
+
     searchQuery.value = ''
-    adviserQuery.value = ''
     searchResults.value = []
-    adviserResults.value = []
+    selectedAdviserId.value = ''
 }
 
 const submit = () => {
     isSaving.value = true
+    form.clearErrors()
 
-    setTimeout(() => {
-        form.transform((data) => ({
-            title: sanitizePlainText(data.title),
-            researchers: data.researchers.map((r) => r.id),
-            adviser_id: data.adviser ? data.adviser.id : null,
-        })).post(route('student.projects.store'), {
-            preserveScroll: true,
-            onSuccess: async () => {
-                resetFormState()
+    form.transform((data) => ({
+        proposal_titles: data.proposal_titles.map((title) =>
+            sanitizePlainText(title),
+        ),
+        proposal_files: data.proposal_files,
+        researchers: data.researchers.map((r) => r.id),
+        preferred_adviser_ids: data.preferred_advisers.map((a) => a.id),
+    })).post(route('student.projects.store'), {
+        forceFormData: true,
+        preserveScroll: true,
 
-                await showSuccessAlert(
-                    'Welcome to Your Dashboard! 🎉',
-                    'Your project has been successfully created.',
-                )
+        onSuccess: async () => {
+            resetFormState()
 
-                window.location.href = route('student.dashboard')
-            },
-            onError: async () => {
-                await showErrorAlert('Error', 'Something went wrong.')
-                isSaving.value = false
-            },
-            onFinish: () => {
-                if (Object.keys(form.errors).length > 0) {
-                    isSaving.value = false
-                }
-            },
-        })
-    }, 3000)
+            await showSuccessAlert(
+                'Topic Proposal Submitted! 🎉',
+                'Your topic proposal has been submitted successfully.',
+            )
+
+            window.location.href = route('student.dashboard')
+        },
+
+        onError: async (errors) => {
+            const errorMessage =
+                errors.error ||
+                errors.proposal_files ||
+                errors['proposal_files.0'] ||
+                errors['proposal_files.1'] ||
+                errors['proposal_files.2'] ||
+                errors.preferred_adviser_ids ||
+                errors['preferred_adviser_ids.0'] ||
+                errors['preferred_adviser_ids.1'] ||
+                errors['preferred_adviser_ids.2'] ||
+                errors.researchers ||
+                errors['researchers.0'] ||
+                errors['proposal_titles.0'] ||
+                errors['proposal_titles.1'] ||
+                errors['proposal_titles.2'] ||
+                errors.proposal_titles ||
+                'Please check all required fields.'
+
+            await showErrorAlert('Error', errorMessage)
+
+            isSaving.value = false
+        },
+
+        onFinish: () => {
+            isSaving.value = false
+        },
+    })
 }
 </script>
 
@@ -287,28 +325,21 @@ const submit = () => {
                     @submit.prevent="submit"
                     class="grid grid-cols-1 gap-4 md:grid-cols-2"
                 >
+                    <div
+                        v-if="form.errors.error"
+                        class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 md:col-span-2"
+                    >
+                        {{ form.errors.error }}
+                    </div>
+
+                    <!-- Project Details -->
                     <div class="md:col-span-2">
-                        <label class="mb-1 block text-sm font-medium text-gray-700">
-                            Project Title <span class="text-red-600">*</span>
-                        </label>
+                        <div class="mb-3">
+                            <h2 class="text-based font-semibold text-black-900">
+                                Project Details
+                            </h2>
 
-                        <input
-                            v-model="form.title"
-                            type="text"
-                            maxlength="200"
-                            placeholder="Enter project title"
-                            class="w-full rounded-md border px-3 py-2 text-sm"
-                        />
-
-                        <div class="mt-1 flex items-center justify-between">
-                            <div v-if="form.errors.title" class="text-xs text-red-600">
-                                {{ form.errors.title }}
-                            </div>
-                            <div v-else></div>
-
-                            <div class="text-xs text-gray-500">
-                                {{ form.title.length }}/200
-                            </div>
+                           
                         </div>
                     </div>
 
@@ -316,6 +347,7 @@ const submit = () => {
                         <label class="mb-1 block text-sm font-medium text-gray-700">
                             College
                         </label>
+
                         <input
                             :value="displayCollegeName"
                             disabled
@@ -327,6 +359,7 @@ const submit = () => {
                         <label class="mb-1 block text-sm font-medium text-gray-700">
                             Department
                         </label>
+
                         <input
                             :value="displayDepartmentName"
                             disabled
@@ -338,6 +371,7 @@ const submit = () => {
                         <label class="mb-1 block text-sm font-medium text-gray-700">
                             Academic Year
                         </label>
+
                         <input
                             :value="displayAcademicYear"
                             disabled
@@ -349,6 +383,7 @@ const submit = () => {
                         <label class="mb-1 block text-sm font-medium text-gray-700">
                             Semester
                         </label>
+
                         <input
                             :value="displaySemester"
                             disabled
@@ -360,6 +395,7 @@ const submit = () => {
                         <label class="mb-1 block text-sm font-medium text-gray-700">
                             Project Type
                         </label>
+
                         <input
                             :value="displayProjectType"
                             disabled
@@ -367,12 +403,97 @@ const submit = () => {
                         />
                     </div>
 
-                    <div class="min-w-0">
+                    <!-- Proposal Topics -->
+                    <div class="md:col-span-2">
+                        <div class="mb-3 mt-2">
+                            <h2 class="text-sm font-semibold text-gray-900">
+                                Topic Proposal Titles
+                                <span class="text-red-600">*</span>
+                            </h2>
+
+                            <p class="mt-1 text-xs text-gray-500">
+                                Enter 3 proposed project titles and upload one file for each title.
+                            </p>
+                        </div>
+
+                        <div class="grid grid-cols-1 gap-4">
+                            <div
+                                v-for="(_, index) in form.proposal_titles"
+                                :key="index"
+                                class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+                            >
+                                <label class="mb-1 block text-sm font-medium text-gray-700">
+                                    Proposal Title {{ index + 1 }}
+                                    <span class="text-red-600">*</span>
+                                </label>
+
+                                <input
+                                    v-model="form.proposal_titles[index]"
+                                    type="text"
+                                    maxlength="200"
+                                    :placeholder="`Enter proposal title ${index + 1}`"
+                                    class="w-full rounded-md border px-3 py-2 text-sm"
+                                />
+
+                                <div class="mt-1 flex items-center justify-between">
+                                    <div
+                                        v-if="(form.errors as Record<string, string>)[`proposal_titles.${index}`]"
+                                        class="text-xs text-red-600"
+                                    >
+                                        {{
+                                            (form.errors as Record<string, string>)[
+                                                `proposal_titles.${index}`
+                                            ]
+                                        }}
+                                    </div>
+
+                                    <div v-else></div>
+
+                                    <div class="text-xs text-gray-500">
+                                        {{ form.proposal_titles[index].length }}/200
+                                    </div>
+                                </div>
+
+                                <div class="mt-4">
+                                    <label class="mb-1 block text-sm font-medium text-gray-700">
+                                        Proposal File {{ index + 1 }}
+                                        <span class="text-red-600">*</span>
+                                    </label>
+
+                                    <input
+                                        type="file"
+                                        accept=".pdf,.doc,.docx"
+                                        @change="handleProposalFile($event, index)"
+                                        class="block w-full rounded-md border px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-[#0C4B05] file:px-3 file:py-1.5 file:text-sm file:text-white"
+                                    />
+
+                                    <p class="mt-1 text-xs text-gray-500">
+                                        Upload PDF, DOC, or DOCX for Proposal Title {{ index + 1 }}.
+                                    </p>
+
+                                    <div
+                                        v-if="(form.errors as Record<string, string>)[`proposal_files.${index}`]"
+                                        class="mt-1 text-xs text-red-600"
+                                    >
+                                        {{
+                                            (form.errors as Record<string, string>)[
+                                                `proposal_files.${index}`
+                                            ]
+                                        }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Researchers -->
+                    <div class="min-w-0 md:col-span-2">
                         <div class="flex h-full flex-col">
-                            <div class="mb-3 min-h-[58px]">
+                            <div class="mb-3">
                                 <div class="flex items-start justify-between gap-3">
                                     <label class="block text-sm font-medium text-gray-700">
-                                        Researchers <span class="text-red-600">*</span>
+                                        Researchers
+                                        <span class="text-red-600">*</span>
                                     </label>
 
                                     <span class="text-xs text-gray-500">
@@ -385,9 +506,7 @@ const submit = () => {
                                 </p>
                             </div>
 
-                            <div
-                                class="mb-2 flex min-h-[80px] items-start rounded-md border border-dashed border-gray-200 bg-gray-50 px-3 py-3"
-                            >
+                            <div class="mb-2 flex min-h-[80px] items-start rounded-md border border-dashed border-gray-200 bg-gray-50 px-3 py-3">
                                 <div
                                     v-if="form.researchers.length"
                                     class="flex flex-wrap gap-1.5"
@@ -397,7 +516,7 @@ const submit = () => {
                                         :key="r.id"
                                         class="flex max-w-full items-center gap-1 rounded-full bg-[#0C4B05] px-2.5 py-1 text-[11px] text-white"
                                     >
-                                        <span class="max-w-[140px] truncate md:max-w-[180px]">
+                                        <span class="max-w-[180px] truncate md:max-w-[260px]">
                                             {{ r.name }}
                                         </span>
 
@@ -409,6 +528,10 @@ const submit = () => {
                                             ✕
                                         </button>
                                     </div>
+                                </div>
+
+                                <div v-else class="text-xs text-gray-400">
+                                    No researcher selected yet.
                                 </div>
                             </div>
 
@@ -439,7 +562,11 @@ const submit = () => {
                                     v-else-if="(form.errors as Record<string, string>)['researchers.0']"
                                     class="text-xs text-red-600"
                                 >
-                                    {{ (form.errors as Record<string, string>)['researchers.0'] }}
+                                    {{
+                                        (form.errors as Record<string, string>)[
+                                            'researchers.0'
+                                        ]
+                                    }}
                                 </div>
                             </div>
 
@@ -456,6 +583,7 @@ const submit = () => {
                                     <div class="break-words text-sm font-medium">
                                         {{ user.first_name }} {{ user.last_name }}
                                     </div>
+
                                     <div class="break-all text-[11px] text-gray-500">
                                         {{ user.email }}
                                     </div>
@@ -471,85 +599,133 @@ const submit = () => {
                         </div>
                     </div>
 
-                    <div class="min-w-0">
-                        <div class="flex h-full flex-col">
-                            <div class="mb-3 min-h-[58px]">
-                                <label class="block text-sm font-medium text-gray-700">
-                                    Adviser <span class="text-red-600">*</span>
-                                </label>
+<!-- Preferred Advisers -->
+<!-- Preferred Advisers -->
+<div class="min-w-0 md:col-span-2">
+    <div class="flex h-full flex-col">
+        <div class="mb-3">
+            <div class="flex items-start justify-between gap-3">
+                <label class="block text-sm font-medium text-gray-700">
+                    Preferred Advisers
+                    <span class="text-red-600">*</span>
+                </label>
 
-                                <p class="mt-1 select-none text-xs text-transparent">
-                                    Maximum of 5 members including the leader
-                                </p>
-                            </div>
+                <span class="text-sm text-gray-500">
+                    {{ form.preferred_advisers.length }}/3
+                </span>
+            </div>
 
-                            <div
-                                class="mb-2 flex min-h-[80px] items-start rounded-md border border-dashed border-gray-200 bg-gray-50 px-3 py-3"
-                            >
-                                <div v-if="form.adviser" class="flex flex-wrap gap-1.5">
-                                    <div
-                                        class="flex max-w-full items-center gap-1 rounded-full bg-[#0C4B05] px-2.5 py-1 text-[11px] text-white"
-                                    >
-                                        <span class="max-w-[140px] truncate md:max-w-[180px]">
-                                            {{ form.adviser.name }}
-                                        </span>
+            <p class="mt-1 text-sm text-gray-500">
+                Select exactly 3 preferred advisers. First selected adviser is the priority.
+            </p>
+        </div>
 
-                                        <button
-                                            type="button"
-                                            @click="removeAdviser"
-                                            class="leading-none"
-                                        >
-                                            ✕
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
+        <div
+            class="mb-2 flex min-h-[80px] items-start rounded-md border border-dashed border-gray-200 bg-white px-3 py-3"
+        >
+            <div
+                v-if="form.preferred_advisers.length"
+                class="flex flex-wrap gap-2"
+            >
+                <div
+                    v-for="(adviser, index) in form.preferred_advisers"
+                    :key="adviser.id"
+                    class="flex max-w-full items-center gap-2 rounded-full bg-gray-200 px-4 py-2 text-sm font-medium text-black-700"
+                >
+                    <span class="max-w-[180px] truncate md:max-w-[260px]">
+                        {{ adviser.name }}
+                    </span>
 
-                            <input
-                                v-model="adviserQuery"
-                                type="text"
-                                placeholder="Search faculty adviser..."
-                                class="w-full rounded-md border px-3 py-2 text-sm"
-                            />
+                    <!-- Priority Plain Text -->
+                   <span
+    v-if="index === 0"
+    class="ml-1 text-xs font-semibold text-gray-600"
+>
+    (Priority)
+</span>
 
-                            <div class="mt-1 min-h-[20px]">
-                                <div
-                                    v-if="form.errors.adviser_id"
-                                    class="text-xs text-red-600"
-                                >
-                                    {{ form.errors.adviser_id }}
-                                </div>
-                            </div>
+                    <button
+                        type="button"
+                        @click="removeAdviser(adviser.id)"
+                        class="ml-1 text-sm text-gray-500 transition hover:text-red-600"
+                    >
+                        ✕
+                    </button>
+                </div>
+            </div>
 
-                            <div
-                                v-if="adviserResults.length"
-                                class="mt-1 max-h-60 w-full overflow-y-auto rounded-md border bg-white shadow-sm"
-                            >
-                                <div
-                                    v-for="user in adviserResults"
-                                    :key="user.id"
-                                    @click="selectAdviser(user)"
-                                    class="cursor-pointer px-3 py-2 hover:bg-gray-100"
-                                >
-                                    <div class="break-words text-sm font-medium">
-                                        {{ user.first_name }} {{ user.last_name }}
-                                    </div>
-                                    <div class="break-all text-[11px] text-gray-500">
-                                        {{ user.email }}
-                                    </div>
-                                </div>
-                            </div>
+            <div v-else class="text-sm text-gray-400">
+                No adviser selected yet.
+            </div>
+        </div>
 
-                            <div
-                                v-if="isSearchingAdviser"
-                                class="mt-1 text-[11px] text-gray-500"
-                            >
-                                Searching adviser...
-                            </div>
-                        </div>
-                    </div>
+        <div class="flex flex-col gap-2 md:flex-row md:items-center">
+            <select
+                v-model="selectedAdviserId"
+                :disabled="form.preferred_advisers.length >= 3"
+                class="w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm focus:border-[#0C4B05] focus:outline-none focus:ring-1 focus:ring-[#0C4B05] disabled:cursor-not-allowed disabled:bg-gray-100"
+            >
+                <option value="">
+                    Choose faculty adviser
+                </option>
 
-                    <div class="pt-2 md:col-span-2">
+                <option
+                    v-for="faculty in availableFaculty"
+                    :key="faculty.id"
+                    :value="faculty.id"
+                >
+                    {{ faculty.name }} -
+                    {{ faculty.department_name ?? 'No Department' }} -
+                    {{ faculty.email }}
+                </option>
+            </select>
+
+            <button
+                type="button"
+                @click="addAdviserFromDropdown"
+                :disabled="!selectedAdviserId || form.preferred_advisers.length >= 3"
+                class="rounded-md bg-[#0C4B05] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#0a3d04] disabled:cursor-not-allowed disabled:opacity-50 md:shrink-0"
+            >
+                Add 
+            </button>
+        </div>
+
+        <div class="mt-2 min-h-[20px]">
+            <div
+                v-if="form.preferred_advisers.length >= 3"
+                class="text-sm text-amber-600"
+            >
+                You already selected 3 preferred advisers.
+            </div>
+
+            <div
+                v-else-if="availableFaculty.length === 0"
+                class="text-sm text-gray-500"
+            >
+                No visible faculty advisers available.
+            </div>
+
+            <div
+                v-else-if="form.errors.preferred_adviser_ids"
+                class="text-sm text-red-600"
+            >
+                {{ form.errors.preferred_adviser_ids }}
+            </div>
+
+            <div
+                v-else-if="(form.errors as Record<string, string>)['preferred_adviser_ids.0']"
+                class="text-sm text-red-600"
+            >
+                {{
+                    (form.errors as Record<string, string>)[
+                        'preferred_adviser_ids.0'
+                    ]
+                }}
+            </div>
+        </div>
+    </div>
+</div>
+                    <div class="pb-20 pt-4 md:col-span-2 md:pb-10">
                         <button
                             type="submit"
                             :disabled="isSaving"
@@ -559,7 +735,12 @@ const submit = () => {
                                 v-if="isSaving"
                                 class="h-4 w-4 animate-spin"
                             />
-                            {{ isSaving ? 'Creating...' : 'Create Project' }}
+
+                            {{
+                                isSaving
+                                    ? 'Submitting...'
+                                    : 'Submit Topic Proposal'
+                            }}
                         </button>
                     </div>
                 </form>
@@ -567,16 +748,3 @@ const submit = () => {
         </SidebarInset>
     </SidebarProvider>
 </template>
-
-
-
-
-
-
-
-
-
-
-
-
-

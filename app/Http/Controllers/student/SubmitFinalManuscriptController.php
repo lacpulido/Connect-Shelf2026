@@ -29,6 +29,7 @@ class SubmitFinalManuscriptController extends Controller
                 'manuscriptSubmitted' => false,
                 'manuscriptStatus' => null,
                 'manuscriptFileName' => null,
+                'revisionComments' => null,
                 'canSubmitFinalManuscript' => false,
                 'approvedManuscriptDocument' => null,
             ]);
@@ -52,6 +53,11 @@ class SubmitFinalManuscriptController extends Controller
             'manuscriptSubmitted' => (bool) $manuscript,
             'manuscriptStatus' => $manuscript->status ?? null,
             'manuscriptFileName' => $manuscript->original_filename ?? $manuscript->filename ?? null,
+            'revisionComments' => $manuscript->revision_comment
+                ?? $manuscript->revision_comments
+                ?? $manuscript->comments
+                ?? $manuscript->remarks
+                ?? null,
             'canSubmitFinalManuscript' => (bool) $approvedDocument,
             'approvedManuscriptDocument' => $approvedDocument ? [
                 'id' => $approvedDocument->id,
@@ -77,12 +83,6 @@ class SubmitFinalManuscriptController extends Controller
                 ]);
             }
 
-            $validated = $request->validate([
-                'title' => ['required', 'string', 'max:255'],
-                'abstract' => ['required', 'string'],
-                'manuscript' => ['required', 'file', 'mimes:pdf', 'max:15360'],
-            ]);
-
             $project = $this->getStudentProject($user->id);
 
             if (! $project) {
@@ -103,7 +103,26 @@ class SubmitFinalManuscriptController extends Controller
                 ]);
             }
 
-            if (ProjectManuscript::where('project_id', $project->id)->exists()) {
+            $existingManuscript = ProjectManuscript::where('project_id', $project->id)
+                ->latest()
+                ->first();
+
+            $existingStatus = strtolower(trim((string) ($existingManuscript->status ?? '')));
+
+            $isRevision = $existingManuscript && in_array($existingStatus, [
+                'revision',
+                'request_revision',
+                'requested_revision',
+                'revise',
+            ], true);
+
+            $validated = $request->validate([
+                'title' => [$isRevision ? 'nullable' : 'required', 'string', 'max:255'],
+                'abstract' => [$isRevision ? 'nullable' : 'required', 'string'],
+                'manuscript' => ['required', 'file', 'mimes:pdf', 'max:15360'],
+            ]);
+
+            if ($existingManuscript && ! $isRevision) {
                 DB::rollBack();
 
                 return back()->withErrors([
@@ -111,17 +130,9 @@ class SubmitFinalManuscriptController extends Controller
                 ]);
             }
 
-            if (! $request->hasFile('manuscript')) {
-                DB::rollBack();
-
-                return back()->withErrors([
-                    'manuscript' => 'Please upload a manuscript file.',
-                ]);
-            }
-
             $file = $request->file('manuscript');
 
-            if (! $file->isValid()) {
+            if (! $file || ! $file->isValid()) {
                 DB::rollBack();
 
                 return back()->withErrors([
@@ -146,14 +157,40 @@ class SubmitFinalManuscriptController extends Controller
                 throw new \Exception('Failed to upload manuscript file.');
             }
 
-            $manuscript = ProjectManuscript::create([
-                'project_id' => $project->id,
-                'title' => $validated['title'],
-                'abstract' => $validated['abstract'],
-                'filename' => $storedFileName,
-                'original_filename' => $originalName,
-                'status' => 'pending',
-            ]);
+            if ($isRevision) {
+                if (
+                    $existingManuscript->filename &&
+                    Storage::disk('local')->exists('final_manuscripts/' . $existingManuscript->filename)
+                ) {
+                    Storage::disk('local')->delete('final_manuscripts/' . $existingManuscript->filename);
+                }
+
+                $existingManuscript->update([
+                    'filename' => $storedFileName,
+                    'original_filename' => $originalName,
+                    'status' => 'resubmitted',
+                    'revision_comment' => null,
+                    'updated_at' => now(),
+                ]);
+
+                $manuscript = $existingManuscript;
+                $successMessage = 'Final manuscript resubmitted successfully.';
+                $notificationTitle = 'Final Manuscript Resubmitted';
+                $notificationAction = 'resubmitted';
+            } else {
+                $manuscript = ProjectManuscript::create([
+                    'project_id' => $project->id,
+                    'title' => $validated['title'],
+                    'abstract' => $validated['abstract'],
+                    'filename' => $storedFileName,
+                    'original_filename' => $originalName,
+                    'status' => 'pending',
+                ]);
+
+                $successMessage = 'Final manuscript submitted successfully.';
+                $notificationTitle = 'Final Manuscript Submitted';
+                $notificationAction = 'submitted';
+            }
 
             $submitterName = trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? ''));
 
@@ -174,8 +211,8 @@ class SubmitFinalManuscriptController extends Controller
             foreach ($departmentChairs as $chair) {
                 Notification::create([
                     'user_id' => $chair->id,
-                    'title' => 'Final Manuscript Submitted',
-                    'message' => $submitterName . ' submitted the final manuscript for project "' . $project->title . '".',
+                    'title' => $notificationTitle,
+                    'message' => $submitterName . ' ' . $notificationAction . ' the final manuscript for project "' . $project->title . '".',
                     'type' => 'final_manuscript_submitted',
                     'reference_id' => $manuscript->id,
                     'reference_type' => ProjectManuscript::class,
@@ -185,7 +222,7 @@ class SubmitFinalManuscriptController extends Controller
 
             DB::commit();
 
-            return back()->with('success', 'Final manuscript submitted successfully.');
+            return back()->with('success', $successMessage);
         } catch (\Throwable $e) {
             DB::rollBack();
 

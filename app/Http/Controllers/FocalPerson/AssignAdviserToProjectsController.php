@@ -30,6 +30,8 @@ class AssignAdviserToProjectsController extends Controller
                 'panelists',
                 'schedule',
             ])
+            ->whereNotNull('adviser_id')
+            ->whereRaw('LOWER(status) = ?', ['ongoing'])
             ->whereHas('user', function ($query) use ($departmentId) {
                 $query->where('department_id', $departmentId);
             })
@@ -81,7 +83,10 @@ class AssignAdviserToProjectsController extends Controller
         $adviserRole = Role::where('name', 'Adviser')->firstOrFail();
 
         DB::transaction(function () use ($project, $faculty, $adviserRole) {
-            $project->update(['adviser_id' => $faculty->id]);
+            $project->update([
+                'adviser_id' => $faculty->id,
+            ]);
+
             $faculty->roles()->syncWithoutDetaching([$adviserRole->id]);
         });
 
@@ -125,7 +130,7 @@ class AssignAdviserToProjectsController extends Controller
         $facultyName = trim(($faculty->first_name ?? '') . ' ' . ($faculty->last_name ?? ''));
 
         $studentMessage = 'Your project "' . $project->title . '" has been reviewed. ' .
-                          'Adviser ' . $facultyName . ' has been assigned.';
+            'Adviser ' . $facultyName . ' has been assigned.';
 
         $studentIds = collect([$project->user_id])
             ->merge($project->researchers->pluck('id'))
